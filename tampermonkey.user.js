@@ -49,9 +49,9 @@
                             setTimeout(() => {
                                 const submitBtns = document.querySelectorAll('a.btn-submit, button.submit, .submit-btn, [onclick*="submit"]');
                                 if(submitBtns.length > 0) {
-                                    // 开启这行代码会自动交卷，如需确认请保留注释
-                                    // submitBtns[0].click();
-                                    console.log('[学习通助手] 已选择答案，请手动点击提交以确保无误（或在脚本中开启自动提交代码）。');
+                                    // 自动交卷
+                                    submitBtns[0].click();
+                                    console.log('[学习通助手] 已自动点击提交交卷。');
                                 }
                             }, 500);
                         } else {
