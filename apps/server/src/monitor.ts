@@ -19,8 +19,16 @@ import { PromptsOptions, addressPrompts, monitorPromptsQuestions } from './confi
 const JSDOM = new jsdom.JSDOM('', { url: 'https://im.chaoxing.com/webim/me' });
 (globalThis.window as any) = JSDOM.window;
 (globalThis.WebSocket as any) = WebSocket;
-globalThis.navigator = JSDOM.window.navigator;
-globalThis.location = JSDOM.window.location;
+Object.defineProperty(globalThis, 'navigator', {
+  value: JSDOM.window.navigator,
+  configurable: true,
+  writable: true,
+});
+Object.defineProperty(globalThis, 'location', {
+  value: JSDOM.window.location,
+  configurable: true,
+  writable: true,
+});
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const webIM = require('./utils/websdk3.1.4.js').default;
