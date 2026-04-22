@@ -6,6 +6,8 @@ const root = __dirname;
 const storagePath = path.join(root, 'apps', 'server', 'build', 'configs', 'storage.json');
 const monitorPath = path.join(root, 'apps', 'server', 'build', 'monitor.js');
 const credentialPath = path.join(root, 'keep-monitor.credentials.json');
+const defaultPhone = process.env.CHAOXING_DEFAULT_PHONE || '15886795013';
+const defaultLocation = process.env.CHAOXING_DEFAULT_LOCATION || '116.36,40.00/北京语言大学-主楼南';
 
 const options = {
   userIndex: 0,
@@ -200,7 +202,30 @@ function writeStorage(storage) {
   fs.renameSync(tmpPath, storagePath);
 }
 
-function getSelectedUser(storage) {
+function defaultMonitorConfig() {
+  return {
+    delay: 15,
+    presetAddress: [parseLocationInput(defaultLocation)],
+  };
+}
+
+function ensurePromptStartUser(storage) {
+  if (!Array.isArray(storage.users)) {
+    storage.users = [];
+  }
+
+  if (storage.users.length === 0) {
+    storage.users.push({
+      phone: defaultPhone,
+      params: {},
+      monitor: defaultMonitorConfig(),
+      mailing: { enabled: false },
+      cqserver: { cq_enabled: false },
+    });
+  }
+}
+
+function getSelectedUser(storage, allowMissingParams = false) {
   const users = Array.isArray(storage.users) ? storage.users : [];
   if (users.length === 0) {
     fail("No saved users found. Run 'pnpm monitor' once first.");
@@ -211,7 +236,7 @@ function getSelectedUser(storage) {
   }
 
   const user = users[options.userIndex];
-  if (!user.params) {
+  if (!user.params && !allowMissingParams) {
     fail("Selected user has no saved login params. Run 'pnpm monitor' once and log in again.");
   }
 
@@ -339,7 +364,10 @@ if (!fs.existsSync(storagePath)) {
 }
 
 let storage = loadStorage();
-let user = getSelectedUser(storage);
+if (options.promptStart) {
+  ensurePromptStartUser(storage);
+}
+let user = getSelectedUser(storage, options.promptStart);
 
 if (options.setCredentials) {
   setEncryptedCredentials(user.phone);

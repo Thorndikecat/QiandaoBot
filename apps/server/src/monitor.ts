@@ -9,6 +9,7 @@ import CQ from './functions/cq';
 import { GeneralSign, GeneralSign_2 } from './functions/general';
 import { LocationSign, LocationSign_2 } from './functions/location';
 import { getObjectIdFromcxPan, PhotoSign, PhotoSign_2 } from './functions/photo';
+import { handlePracticeMessage, isPracticeMessage } from './functions/practice';
 import { QRCodeSign } from './functions/qrcode';
 import { QrCodeScan } from './functions/tencent.qrcode';
 import { getIMParams, getLocalUsers, userLogin } from './functions/user';
@@ -343,6 +344,10 @@ process.on('SIGINT', () => {
           cq.send(`${result} - ${IM_Params.myName}`, config.cqserver.target_id);
         }
 
+      } else if (isPracticeMessage(message)) {
+        void handlePracticeMessage(message, params as BasicCookie).catch((error) => {
+          console.log(`[随堂练习] 处理失败：${error}`);
+        });
       }
     },
     onError: (msg: string) => {

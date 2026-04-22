@@ -3,7 +3,7 @@
   "version": "4.3.5",
   "description": "超星学习通签到项目",
   "scripts": {
-    "build": "tsc && node ./src/scripts/cplibs.js",
+    "build": "node ./src/scripts/build.js",
     "start": "node ./build/index.js",
     "serve": "node ./build/serve.js",
     "monitor": "node ./build/monitor.js",
