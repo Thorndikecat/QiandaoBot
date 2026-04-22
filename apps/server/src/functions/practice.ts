@@ -268,11 +268,22 @@ export const handlePracticeMessage = async (message: any, params: BasicCookie) =
   handledPracticeKeys.add(key);
 
   let options = extractOptionsFromObject(message);
+  let pageHtml = '';
 
   if (options.length < 2 && attachment.url) {
     try {
-      const page = await fetchPracticePage(attachment.url, params);
-      options = extractOptionsFromHtml(page);
+      pageHtml = await fetchPracticePage(attachment.url, params);
+      options = extractOptionsFromHtml(pageHtml);
+      
+      // 保存页面源码供后续分析真实提交 API 使用
+      try {
+        const pageLogPath = path.resolve(__dirname, '../../../../logs/last_practice_page.html');
+        fs.mkdirSync(path.dirname(pageLogPath), { recursive: true });
+        fs.writeFileSync(pageLogPath, pageHtml, 'utf8');
+        console.log(`[随堂练习] 页面源码已保存到 ${pageLogPath}，以便分析提交接口`);
+      } catch (err) {
+        console.log(`[随堂练习] 保存页面源码失败：${err}`);
+      }
     } catch (error) {
       console.log(`[随堂练习] 读取页面失败：${error}`);
     }

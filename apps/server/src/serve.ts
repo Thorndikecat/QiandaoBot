@@ -12,6 +12,8 @@ import { QRCodeSign } from './functions/qrcode';
 import { QrCodeScan } from './functions/tencent.qrcode';
 import { getAccountInfo, getCourses, getPanToken, userLogin } from './functions/user';
 import { getJsonObject } from './utils/file';
+import fs from 'fs';
+import path from 'path';
 const ENVJSON = getJsonObject('env.json');
 
 const app = new Koa();
@@ -33,6 +35,26 @@ router.post('/login', async (ctx) => {
   params.name = (await getAccountInfo(params)) || '获取失败';
   console.log(ctx.request.body);
   ctx.body = params;
+});
+
+router.get('/practice/answer', async (ctx) => {
+  try {
+    const logPath = path.resolve(__dirname, '../../../../logs/practice-options.log');
+    if (fs.existsSync(logPath)) {
+      const content = fs.readFileSync(logPath, 'utf-8');
+      const lines = content.trim().split('\n');
+      const lastAnswer = lines.length > 0 ? lines[lines.length - 1] : null;
+      if (lastAnswer) {
+        ctx.body = { code: 200, answer: lastAnswer, msg: 'success' };
+      } else {
+        ctx.body = { code: 404, msg: '日志为空' };
+      }
+    } else {
+      ctx.body = { code: 404, msg: '暂无答题记录' };
+    }
+  } catch (err: any) {
+    ctx.body = { code: 500, msg: err.message };
+  }
 });
 
 router.post('/activity', async (ctx) => {
