@@ -46,6 +46,16 @@ function fail(message) {
   process.exit(1);
 }
 
+function formatError(error) {
+  if (!error) return 'unknown error';
+  const parts = [];
+  if (error.code) parts.push(error.code);
+  if (error.message) parts.push(error.message);
+  if (error.host) parts.push(`host=${error.host}`);
+  if (error.port) parts.push(`port=${error.port}`);
+  return parts.length ? parts.join(' | ') : String(error);
+}
+
 function maskPhone(phone) {
   const value = String(phone || '');
   if (!value) return '[unknown]';
@@ -406,9 +416,14 @@ if (options.refreshLogin) {
 let child = null;
 let stopping = false;
 let promptLoginRefreshed = false;
+let restartTimer = null;
 
 function stopAndExit(signal) {
   stopping = true;
+  if (restartTimer) {
+    clearTimeout(restartTimer);
+    restartTimer = null;
+  }
   if (child && !child.killed) {
     child.kill(signal);
     return;
@@ -419,46 +434,70 @@ function stopAndExit(signal) {
 process.on('SIGINT', () => stopAndExit('SIGINT'));
 process.on('SIGTERM', () => stopAndExit('SIGTERM'));
 
-async function startMonitor() {
-  storage = loadStorage();
-  user = getSelectedUser(storage);
-
-  if (credentials) {
-    const ok = (options.promptLogin || options.promptStart) && !promptLoginRefreshed
-      ? await refreshSavedLogin(storage, user, credentials)
-      : await ensureFreshLogin(storage, user, credentials);
-    if (!ok) {
-      console.log(`[keep-monitor] Re-login failed. Trying again in ${options.restartDelaySeconds} seconds.`);
-      setTimeout(startMonitor, options.restartDelaySeconds * 1000);
-      return;
-    }
-    if (options.promptLogin || options.promptStart) {
-      promptLoginRefreshed = true;
-      storage = loadStorage();
-      user = getSelectedUser(storage);
-    }
-  }
-
-  const payloadBase64 = Buffer.from(JSON.stringify(getMonitorPayload(user)), 'utf8').toString('base64');
-  const startedAt = new Date().toLocaleString();
-  console.log(`[keep-monitor] Starting monitor at ${startedAt}...`);
-
-  child = spawn(process.execPath, [monitorPath, '--auth', '-', payloadBase64], {
-    cwd: root,
-    stdio: 'inherit',
-  });
-
-  child.on('exit', (code, signal) => {
-    const stoppedAt = new Date().toLocaleString();
-    console.log(`[keep-monitor] Monitor stopped at ${stoppedAt} with code ${code} signal ${signal || 'none'}.`);
-
-    if (stopping) {
-      process.exit(code || 0);
-    }
-
-    console.log(`[keep-monitor] Restarting in ${options.restartDelaySeconds} seconds. Press Ctrl+C to stop.`);
-    setTimeout(startMonitor, options.restartDelaySeconds * 1000);
-  });
+function scheduleStart() {
+  if (stopping || restartTimer) return;
+  console.log(`[keep-monitor] Restarting in ${options.restartDelaySeconds} seconds. Press Ctrl+C to stop.`);
+  restartTimer = setTimeout(() => {
+    restartTimer = null;
+    startMonitor();
+  }, options.restartDelaySeconds * 1000);
 }
 
-startMonitor();
+async function startMonitor() {
+  try {
+    storage = loadStorage();
+    user = getSelectedUser(storage);
+
+    if (credentials) {
+      const ok = (options.promptLogin || options.promptStart) && !promptLoginRefreshed
+        ? await refreshSavedLogin(storage, user, credentials)
+        : await ensureFreshLogin(storage, user, credentials);
+      if (!ok) {
+        console.log('[keep-monitor] Re-login failed.');
+        scheduleStart();
+        return;
+      }
+      if (options.promptLogin || options.promptStart) {
+        promptLoginRefreshed = true;
+        storage = loadStorage();
+        user = getSelectedUser(storage);
+      }
+    }
+
+    const payloadBase64 = Buffer.from(JSON.stringify(getMonitorPayload(user)), 'utf8').toString('base64');
+    const startedAt = new Date().toLocaleString();
+    console.log(`[keep-monitor] Starting monitor at ${startedAt}...`);
+
+    child = spawn(process.execPath, [monitorPath, '--auth', '-', payloadBase64], {
+      cwd: root,
+      stdio: 'inherit',
+    });
+
+    child.once('error', (error) => {
+      console.log(`[keep-monitor] Could not start monitor: ${formatError(error)}`);
+      child = null;
+      scheduleStart();
+    });
+
+    child.on('exit', (code, signal) => {
+      const stoppedAt = new Date().toLocaleString();
+      console.log(`[keep-monitor] Monitor stopped at ${stoppedAt} with code ${code} signal ${signal || 'none'}.`);
+      child = null;
+
+      if (stopping) {
+        process.exit(code || 0);
+      }
+
+      scheduleStart();
+    });
+  } catch (error) {
+    child = null;
+    console.log(`[keep-monitor] Monitor startup failed: ${formatError(error)}`);
+    scheduleStart();
+  }
+}
+
+startMonitor().catch((error) => {
+  console.log(`[keep-monitor] Monitor startup failed: ${formatError(error)}`);
+  scheduleStart();
+});

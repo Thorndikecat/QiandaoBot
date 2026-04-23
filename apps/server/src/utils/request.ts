@@ -15,6 +15,7 @@ interface RequestOptions {
   headers?: ClientRequestArgs['headers'];
   method?: RequestMethodType;
   gzip?: boolean;
+  timeoutMs?: number;
 }
 
 interface ResponseType {
@@ -49,6 +50,7 @@ const request = (url: string, options: RequestOptions, payload?: any): Promise<R
         gzip.on('end', () => {
           resolve({ data, headers: res.headers, statusCode: res.statusCode });
         });
+        gzip.on('error', reject);
       } else {
         // 返回内容为字符串的情况下直接拼接返回
         res.on('data', (chunk) => {
@@ -61,6 +63,11 @@ const request = (url: string, options: RequestOptions, payload?: any): Promise<R
           reject(e);
         });
       }
+    });
+
+    req.on('error', reject);
+    req.setTimeout(options.timeoutMs || 45000, () => {
+      req.destroy(new Error(`Request timeout after ${options.timeoutMs || 45000}ms: ${url}`));
     });
 
     if (options.method === RequestMethod.POST) {
