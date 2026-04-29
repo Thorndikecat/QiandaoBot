@@ -128,6 +128,29 @@ async function configure(phone: string) {
   return JSON.parse(JSON.stringify({ mailing: config!.mailing, monitor: config!.monitor, cqserver: config!.cqserver }));
 }
 
+// 自动获取二维码并签到，优先使用 presetAddress 中保存的位置
+const autoQrSign = async (
+  activeId: string,
+  realname: string,
+  params: any,
+  config: any,
+): Promise<string | null> => {
+  const enc = await fetchAndDecodeQrEnc(activeId, params);
+  if (!enc) return null;
+
+  const loc = config.presetAddress?.[0] || {};
+  return await QRCodeSign({
+    ...params,
+    activeId,
+    enc,
+    name: realname,
+    lat: String(loc.lat || 34.817038),
+    lon: String(loc.lon || 113.516288),
+    address: loc.address || '',
+    altitude: config.altitude || '100',
+  });
+};
+
 async function Sign(realname: string, params: UserCookieType & { tuid: string; }, config: any, activity: Activity) {
   let result = null;
   // 群聊签到，无课程
@@ -156,21 +179,7 @@ async function Sign(realname: string, params: UserCookieType & { tuid: string; }
       }
       case 'qr': {
         if (config.qrAutoFetch) {
-          const enc = await fetchAndDecodeQrEnc(activity.activeId, params);
-          if (enc) {
-            result = await QRCodeSign({
-              ...params,
-              activeId: activity.activeId,
-              enc,
-              name: realname,
-              lat: String(config.lat || 34.817038),
-              lon: String(config.lon || 113.516288),
-              address: config.address || '',
-              altitude: config.altitude || '100',
-            });
-          } else {
-            result = '[二维码]自动获取失败，请手动发送二维码照片';
-          }
+          result = await autoQrSign(activity.activeId, realname, params, config) || '[二维码]自动获取失败，请手动发送二维码照片';
         } else {
           result = '[二维码]请发送二维码照片';
           console.log(red('二维码签到，需人工干预！'));
@@ -187,21 +196,7 @@ async function Sign(realname: string, params: UserCookieType & { tuid: string; }
     case 2: {
       // 二维码签到
       if (config.qrAutoFetch) {
-        const enc = await fetchAndDecodeQrEnc(activity.activeId, params);
-        if (enc) {
-          result = await QRCodeSign({
-            ...params,
-            activeId: activity.activeId,
-            enc,
-            name: realname,
-            lat: String(config.lat || 34.817038),
-            lon: String(config.lon || 113.516288),
-            address: config.address || '',
-            altitude: config.altitude || '100',
-          });
-        } else {
-          result = '[二维码]自动获取失败，请手动发送二维码照片';
-        }
+        result = await autoQrSign(activity.activeId, realname, params, config) || '[二维码]自动获取失败，请手动发送二维码照片';
       } else {
         result = '[二维码]请发送二维码照片';
         console.log(red('二维码签到，需人工干预！'));
