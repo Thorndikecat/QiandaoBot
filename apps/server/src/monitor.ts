@@ -16,6 +16,7 @@ import { getIMParams, getLocalUsers, userLogin } from './functions/user';
 import { getJsonObject, getStoredUser, storeUser } from './utils/file';
 import { delay } from './utils/helper';
 import { sendEmail } from './utils/mailer';
+import { fetchAndDecodeQrEnc } from './utils/qrDecode';
 import { PromptsOptions, addressPrompts, monitorPromptsQuestions } from './configs/prompts';
 const JSDOM = new jsdom.JSDOM('', { url: 'https://im.chaoxing.com/webim/me' });
 (globalThis.window as any) = JSDOM.window;
@@ -94,6 +95,7 @@ async function configure(phone: string) {
     monitor.lon = response.lon;
     monitor.lat = response.lat;
     monitor.presetAddress = presetAddress;
+    monitor.qrAutoFetch = response.qrAutoFetch || false;
     mailing.enabled = response.mail;
     mailing.host = response.host;
     mailing.ssl = response.ssl;
@@ -153,8 +155,26 @@ async function Sign(realname: string, params: UserCookieType & { tuid: string; }
         break;
       }
       case 'qr': {
-        result = '[二维码]请发送二维码照片';
-        console.log(red('二维码签到，需人工干预！'));
+        if (config.qrAutoFetch) {
+          const enc = await fetchAndDecodeQrEnc(activity.activeId, params);
+          if (enc) {
+            result = await QRCodeSign({
+              ...params,
+              activeId: activity.activeId,
+              enc,
+              name: realname,
+              lat: String(config.lat || 34.817038),
+              lon: String(config.lon || 113.516288),
+              address: config.address || '',
+              altitude: config.altitude || '100',
+            });
+          } else {
+            result = '[二维码]自动获取失败，请手动发送二维码照片';
+          }
+        } else {
+          result = '[二维码]请发送二维码照片';
+          console.log(red('二维码签到，需人工干预！'));
+        }
         break;
       }
     }
@@ -166,8 +186,26 @@ async function Sign(realname: string, params: UserCookieType & { tuid: string; }
   switch (activity.otherId) {
     case 2: {
       // 二维码签到
-      result = '[二维码]请发送二维码照片';
-      console.log(red('二维码签到，需人工干预！'));
+      if (config.qrAutoFetch) {
+        const enc = await fetchAndDecodeQrEnc(activity.activeId, params);
+        if (enc) {
+          result = await QRCodeSign({
+            ...params,
+            activeId: activity.activeId,
+            enc,
+            name: realname,
+            lat: String(config.lat || 34.817038),
+            lon: String(config.lon || 113.516288),
+            address: config.address || '',
+            altitude: config.altitude || '100',
+          });
+        } else {
+          result = '[二维码]自动获取失败，请手动发送二维码照片';
+        }
+      } else {
+        result = '[二维码]请发送二维码照片';
+        console.log(red('二维码签到，需人工干预！'));
+      }
       break;
     }
     case 4: {

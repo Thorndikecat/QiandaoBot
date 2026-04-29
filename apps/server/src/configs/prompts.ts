@@ -91,6 +91,12 @@ export const monitorPromptsQuestions: Array<prompts.PromptObject> = [
   },
   {
     type: 'confirm',
+    name: 'qrAutoFetch',
+    message: '是否启用自动获取二维码？（实验性功能，未经真实签到验证，建议手动扫码）',
+    initial: false,
+  },
+  {
+    type: 'confirm',
     name: 'cq_enabled',
     message: '是否连接到go-cqhttp服务?',
     initial: false,

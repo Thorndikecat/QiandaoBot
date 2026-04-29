@@ -3,6 +3,8 @@ interface MonitorConfig {
   lon: number;
   lat: number;
   address: string;
+  qrAutoFetch?: boolean;
+  presetAddress?: any[];
 }
 
 interface MailConfig {
