@@ -17,23 +17,22 @@ const DefaultParams: UserCookieType = {
   lv: '',
 };
 
-export const userLogin = async (uname: string, password: string): Promise<string | UserCookieType> => {
-  // AES 加密（2026年1月超星从 DES 升级为 AES，key 也变了，同时加密用户名）
-  const transferKey = 'u2oh6Vu^HWe4_AES';
-  const keyHex = cryptojs.enc.Utf8.parse(transferKey);
-  const aesOptions = {
-    iv: keyHex,
+// 超星 2026年1月升级的 AES-CBC 加密
+const encryptByAES = (message: string): string => {
+  const key = cryptojs.enc.Utf8.parse('u2oh6Vu^HWe4_AES');
+  const encrypted = cryptojs.AES.encrypt(message, key, {
+    iv: key,
     mode: cryptojs.mode.CBC,
     padding: cryptojs.pad.Pkcs7,
-  };
-  password = cryptojs.enc.Base64.stringify(
-    cryptojs.AES.encrypt(password, keyHex, aesOptions).ciphertext,
-  );
-  uname = cryptojs.enc.Base64.stringify(
-    cryptojs.AES.encrypt(uname, keyHex, aesOptions).ciphertext,
-  );
+  });
+  return cryptojs.enc.Base64.stringify(encrypted.ciphertext);
+};
 
-  const formdata = `uname=${uname}&password=${password}&fid=-1&t=true&refer=https%3A%2F%2Fi.chaoxing.com&forbidotherlogin=0`;
+export const userLogin = async (uname: string, password: string): Promise<string | UserCookieType> => {
+  const encPwd = encryptByAES(password);
+  const encUname = encryptByAES(uname);
+
+  const formdata = `uname=${encodeURIComponent(encUname)}&password=${encodeURIComponent(encPwd)}&fid=-1&t=true&refer=https%3A%2F%2Fi.chaoxing.com&forbidotherlogin=0`;
 
   // 发送请求
   const result = await request(
