@@ -132,9 +132,8 @@ export const getAccountInfo = async (cookies: BasicCookie): Promise<string> => {
     },
   });
   const data = result.data;
-  const end_of_messageName = data.indexOf('messageName') + 20;
-  const name = data.slice(end_of_messageName, data.indexOf('"', end_of_messageName));
-  return name;
+  const match = data.match(/messageName"\s+value="([^"]+)"/);
+  return match ? match[1] : '获取失败';
 };
 
 // 获取用户鉴权token
@@ -184,12 +183,12 @@ export const getIMParams = async (cookies: BasicCookie): Promise<IMParamsType | 
     console.log('身份凭证似乎过期，请手动登录');
     return 'AuthFailed';
   }
-  let index = data.indexOf('id="myName"');
-  params.myName = data.slice(index + 35, data.indexOf('<', index + 35));
-  index = data.indexOf('id="myToken"');
-  params.myToken = data.slice(index + 36, data.indexOf('<', index + 36));
-  index = data.indexOf('id="myTuid"');
-  params.myTuid = data.slice(index + 35, data.indexOf('<', index + 35));
+  let m = data.match(/id="myName"[^>]*>([^<]+)</);
+  params.myName = m ? m[1] : '';
+  m = data.match(/id="myToken"[^>]*>([^<]+)</);
+  params.myToken = m ? m[1] : '';
+  m = data.match(/id="myTuid"[^>]*>([^<]+)</);
+  params.myTuid = m ? m[1] : '';
   params.myPuid = cookies._uid;
 
   return { ...params };
