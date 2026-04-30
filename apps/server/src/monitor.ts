@@ -338,11 +338,20 @@ process.on('SIGINT', () => {
       process.exit(0);
     },
     onTextMessage: async (message: any) => {
-      if (message?.ext?.attachment?.att_chat_course?.url.includes('sign')) {
+      // 群聊消息的 attachment 可能是 JSON 字符串，需要先解析
+      let att_chat_course: any = null;
+      const rawAtt = message?.ext?.attachment;
+      if (typeof rawAtt === "string") {
+        try { att_chat_course = JSON.parse(rawAtt).att_chat_course; } catch (e) { /* ignore */ }
+      } else if (rawAtt?.att_chat_course) {
+        att_chat_course = rawAtt.att_chat_course;
+      }
+
+      if (att_chat_course?.url?.includes("sign")) {
         const IM_CourseInfo = {
-          aid: message.ext.attachment.att_chat_course.aid,
-          classId: message.ext.attachment.att_chat_course?.courseInfo?.classid,
-          courseId: message.ext.attachment.att_chat_course?.courseInfo?.courseid,
+          aid: att_chat_course.aid,
+          classId: att_chat_course?.courseInfo?.classid,
+          courseId: att_chat_course?.courseInfo?.courseid,
         };
         const PPTActiveInfo = await getPPTActiveInfo({ activeId: IM_CourseInfo.aid, ...(params as UserCookieType) });
 
