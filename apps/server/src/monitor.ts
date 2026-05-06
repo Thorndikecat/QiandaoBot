@@ -15,6 +15,7 @@ import { QrCodeScan } from './functions/tencent.qrcode';
 import { getIMParams, getLocalUsers, userLogin } from './functions/user';
 import { getJsonObject, getStoredUser, storeUser } from './utils/file';
 import { delay } from './utils/helper';
+import { parseSignMessage } from './utils/imMessage';
 import { sendEmail } from './utils/mailer';
 import { fetchAndDecodeQrEnc } from './utils/qrDecode';
 import { PromptsOptions, addressPrompts, monitorPromptsQuestions } from './configs/prompts';
@@ -338,43 +339,45 @@ process.on('SIGINT', () => {
       process.exit(0);
     },
     onTextMessage: async (message: any) => {
-      // 群聊消息的 attachment 可能是 JSON 字符串，需要先解析
-      let att_chat_course: any = null;
-      const rawAtt = message?.ext?.attachment;
-      if (typeof rawAtt === "string") {
-        try { att_chat_course = JSON.parse(rawAtt).att_chat_course; } catch (e) { /* ignore */ }
-      } else if (rawAtt?.att_chat_course) {
-        att_chat_course = rawAtt.att_chat_course;
-      }
+      // Normalize IM sign messages before branching between group and course flows.
+      const signMessage = parseSignMessage(message);
+      if (signMessage) {
+        let signType = signMessage.label || (signMessage.source === 'course' ? 'course sign' : 'group sign');
+        let otherId = 0;
+        let ifphoto = 0;
 
-      if (att_chat_course?.url?.includes("sign")) {
-        const IM_CourseInfo = {
-          aid: att_chat_course.aid,
-          classId: att_chat_course?.courseInfo?.classid,
-          courseId: att_chat_course?.courseInfo?.courseid,
-        };
-        const PPTActiveInfo = await getPPTActiveInfo({ activeId: IM_CourseInfo.aid, ...(params as UserCookieType) });
+        if (signMessage.source === 'course') {
+          if (!signMessage.courseId || !signMessage.classId) {
+            console.log(`[IM] Course sign ${signMessage.activeId} missing courseId/classId, skipped`);
+            return;
+          }
+
+          const PPTActiveInfo = await getPPTActiveInfo({ activeId: signMessage.activeId, ...(params as UserCookieType) });
+          otherId = PPTActiveInfo.otherId;
+          ifphoto = PPTActiveInfo.ifphoto;
+          signType = getSignType(PPTActiveInfo);
+        }
 
         // 签到 & 推送消息
         // 签到检测通知推送
         if (config.cqserver?.cq_enabled) {
-          cq.send(`${IM_Params.myName}，检测到${getSignType(PPTActiveInfo)}，将在${config.monitor.delay}秒后处理`, config.cqserver.target_id);
-          cq.setCache('params', { ...params, activeId: IM_CourseInfo.aid });
+          cq.send(`${IM_Params.myName}，检测到${signType}，将在${config.monitor.delay}秒后处理`, config.cqserver.target_id);
+          cq.setCache('params', { ...params, activeId: signMessage.activeId });
         }
 
         await delay(config.monitor.delay);
         const result = await Sign(IM_Params.myName, params, config.monitor, {
-          classId: IM_CourseInfo.classId,
-          courseId: IM_CourseInfo.courseId,
-          activeId: IM_CourseInfo.aid,
-          otherId: PPTActiveInfo.otherId,
-          ifphoto: PPTActiveInfo.ifphoto,
-          chatId: message?.to,
+          classId: signMessage.classId || '',
+          courseId: signMessage.courseId || '',
+          activeId: signMessage.activeId,
+          otherId,
+          ifphoto,
+          chatId: signMessage.chatId,
         });
         // 邮件推送签到结果
         if (config.mailing?.enabled) {
           sendEmail({
-            aid: IM_CourseInfo.aid,
+            aid: signMessage.activeId,
             uid: params._uid,
             realname: IM_Params.myName,
             status: result,

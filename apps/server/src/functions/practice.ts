@@ -2,6 +2,7 @@ import fs from 'fs';
 import { JSDOM } from 'jsdom';
 import os from 'os';
 import path from 'path';
+import { getChatCourseAttachment } from '../utils/imMessage';
 import { cookieSerialize, request } from '../utils/request';
 
 const PracticeLogPath = path.resolve(__dirname, '../../../../logs/practice-options.log');
@@ -201,7 +202,7 @@ const extractOptionsFromHtml = (html: string): string[] => {
 };
 
 const getAttachment = (message: any): PracticeAttachment | null => {
-  return message?.ext?.attachment?.att_chat_course || message?.ext?.att_chat_course || null;
+  return getChatCourseAttachment(message) as PracticeAttachment | null;
 };
 
 const attachmentText = (attachment: PracticeAttachment, message: any): string => {
