@@ -37,16 +37,17 @@ export const PhotoSign_2 = async (args: BasicCookie & { objectId: string; active
 
 // 在Termux或其他终端中使用，从云盘获取图片
 export const getObjectIdFromcxPan = async (cookies: BasicCookie) => {
-  // 获得 parentId, enc
+  // 获得头id, enc
   const result = await request(PANCHAOXING.URL, {
     headers: {
       Cookie: cookieSerialize(cookies),
     },
   });
   const data = result.data;
-  const start_of_enc = data.indexOf('enc ="') + 6;
+  // 页面变量名已变更: enc → encstr, _rootdir → rootdir
+  const start_of_enc = data.indexOf('encstr ="') + 9;
   const enc = data.slice(start_of_enc, data.indexOf('"', start_of_enc));
-  const start_of_rootdir = data.indexOf('_rootdir = "') + 12;
+  const start_of_rootdir = data.indexOf('rootdir = "') + 12;
   const parentId = data.slice(start_of_rootdir, data.indexOf('"', start_of_rootdir));
 
   // 获得文件列表，找到符合要求的 ObjectID

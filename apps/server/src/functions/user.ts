@@ -17,16 +17,22 @@ const DefaultParams: UserCookieType = {
   lv: '',
 };
 
-export const userLogin = async (uname: string, password: string): Promise<string | UserCookieType> => {
-  // 密码加密
-  const wordArray = cryptojs.enc.Utf8.parse('u2oh6Vu^HWe40fj');
-  const encryptedPassword = cryptojs.DES.encrypt(password, wordArray, {
-    mode: cryptojs.mode.ECB,
+// 超星 2026年1月升级的 AES-CBC 加密
+const encryptByAES = (message: string): string => {
+  const key = cryptojs.enc.Utf8.parse('u2oh6Vu^HWe4_AES');
+  const encrypted = cryptojs.AES.encrypt(message, key, {
+    iv: key,
+    mode: cryptojs.mode.CBC,
     padding: cryptojs.pad.Pkcs7,
   });
-  password = encryptedPassword.ciphertext.toString();
+  return cryptojs.enc.Base64.stringify(encrypted.ciphertext);
+};
 
-  const formdata = `uname=${uname}&password=${password}&fid=-1&t=true&refer=https%253A%252F%252Fi.chaoxing.com&forbidotherlogin=0&validate=`;
+export const userLogin = async (uname: string, password: string): Promise<string | UserCookieType> => {
+  const encPwd = encryptByAES(password);
+  const encUname = encryptByAES(uname);
+
+  const formdata = `uname=${encodeURIComponent(encUname)}&password=${encodeURIComponent(encPwd)}&fid=-1&t=true&refer=https%3A%2F%2Fi.chaoxing.com&forbidotherlogin=0`;
 
   // 发送请求
   const result = await request(
@@ -125,9 +131,8 @@ export const getAccountInfo = async (cookies: BasicCookie): Promise<string> => {
     },
   });
   const data = result.data;
-  const end_of_messageName = data.indexOf('messageName') + 20;
-  const name = data.slice(end_of_messageName, data.indexOf('"', end_of_messageName));
-  return name;
+  const match = data.match(/messageName"\s+value="([^"]+)"/);
+  return match ? match[1] : '获取失败';
 };
 
 // 获取用户鉴权token
@@ -177,12 +182,12 @@ export const getIMParams = async (cookies: BasicCookie): Promise<IMParamsType | 
     console.log('身份凭证似乎过期，请手动登录');
     return 'AuthFailed';
   }
-  let index = data.indexOf('id="myName"');
-  params.myName = data.slice(index + 35, data.indexOf('<', index + 35));
-  index = data.indexOf('id="myToken"');
-  params.myToken = data.slice(index + 36, data.indexOf('<', index + 36));
-  index = data.indexOf('id="myTuid"');
-  params.myTuid = data.slice(index + 35, data.indexOf('<', index + 35));
+  let m = data.match(/id="myName"[^>]*>([^<]+)</);
+  params.myName = m ? m[1] : '';
+  m = data.match(/id="myToken"[^>]*>([^<]+)</);
+  params.myToken = m ? m[1] : '';
+  m = data.match(/id="myTuid"[^>]*>([^<]+)</);
+  params.myTuid = m ? m[1] : '';
   params.myPuid = cookies._uid;
 
   return { ...params };
