@@ -7,11 +7,44 @@
  *
  * 注意：此功能未经真实签到活动验证（无活动时 enc 为 null），默认关闭。
  */
+import https from 'https';
 import jpeg from 'jpeg-js';
 import jsQR from 'jsqr';
-import { cookieSerialize, request } from './request';
+import { cookieSerialize } from './request';
 
 export const QRCODE_IMAGE_URL = 'https://mobilelearn.chaoxing.com/sign/qrcode';
+
+const fetchQrImage = (activeId: string, cookies: BasicCookie): Promise<{ data: Buffer; statusCode?: number }> => {
+  const url = `${QRCODE_IMAGE_URL}?activeId=${activeId}`;
+
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        headers: {
+          Cookie: cookieSerialize(cookies),
+          Referer: 'https://mobilelearn.chaoxing.com/',
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+
+        res.on('data', (chunk: Buffer) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        res.on('end', () => {
+          resolve({ data: Buffer.concat(chunks), statusCode: res.statusCode });
+        });
+        res.on('error', reject);
+      },
+    );
+
+    req.on('error', reject);
+    req.setTimeout(10000, () => {
+      req.destroy(new Error(`Request timeout after 10000ms: ${url}`));
+    });
+  });
+};
 
 /**
  * 下载并解码超星二维码签到图片，提取 enc 参数
@@ -22,16 +55,7 @@ export const fetchAndDecodeQrEnc = async (
   cookies: BasicCookie,
 ): Promise<string | null> => {
   try {
-    const result = await request(
-      `${QRCODE_IMAGE_URL}?activeId=${activeId}`,
-      {
-        headers: {
-          Cookie: cookieSerialize(cookies),
-          Referer: 'https://mobilelearn.chaoxing.com/',
-        },
-        timeoutMs: 10000,
-      },
-    );
+    const result = await fetchQrImage(activeId, cookies);
 
     if (result.statusCode !== 200 || !result.data) {
       console.log('[二维码] 获取图片失败 HTTP', result.statusCode);
@@ -39,7 +63,7 @@ export const fetchAndDecodeQrEnc = async (
     }
 
     // jpeg-js 解码
-    const raw = jpeg.decode(Buffer.from(result.data, 'binary'), { useTArray: true });
+    const raw = jpeg.decode(result.data, { useTArray: true });
 
     // jsQR 解码
     const qrResult = jsQR(
