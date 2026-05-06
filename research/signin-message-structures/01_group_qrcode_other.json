@@ -1,0 +1,37 @@
+{
+  "id": "1546092684744068148",
+  "type": "groupchat",
+  "contentsType": "TEXT",
+  "from": "298752034",
+  "to": "312619054465026",
+  "data": "[二维码签到]",
+  "ext": {
+    "attachment": {
+      "att_chat_course": {
+        "logo": "https://mobilelearn.chaoxing.com/front/mobile/common/images/teachingPlan/qd3.png",
+        "msgStatus": 0,
+        "atypeName": "二维码签到",
+        "general": "1",
+        "title": "二维码签到",
+        "aid": 20524667,
+        "atype": 2,
+        "type": 1,
+        "toolbarType": 2,
+        "subTitle": "04-30 17:49",
+        "url": "https://mobilelearn.chaoxing.com/sign/preSign?courseId=null&classId=&activeId=20524667&chatId=312619054465026&general=0&ls=1"
+      },
+      "attachmentType": 15
+    },
+    "em_apns_ext": {
+      "em_huawei_push_badge_class": "com.chaoxing.mobile.activity.SplashActivity",
+      "em_push_title": "1"
+    },
+    "fromPuid": "344840592"
+  },
+  "sourceMsg": "[二维码签到]",
+  "time": "1777542554960",
+  "msgConfig": null,
+  "error": false,
+  "errorText": "",
+  "errorCode": 0
+}

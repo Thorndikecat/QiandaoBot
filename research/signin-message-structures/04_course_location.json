@@ -1,0 +1,50 @@
+{
+  "id": "1548197678179949804",
+  "type": "groupchat",
+  "contentsType": "TEXT",
+  "from": "86655542",
+  "to": "308065766277123",
+  "data": "",
+  "ext": {
+    "openChatView": {
+      "low": 0,
+      "high": 0,
+      "unsigned": false
+    },
+    "extraInfo": {
+      "status": 1
+    },
+    "chatid": "308065766277123",
+    "attachment": {
+      "att_chat_course": {
+        "aid": 6000159306540,
+        "atype": 2,
+        "atypeName": "位置签到",
+        "courseInfo": {
+          "bbsid": "0f6aa8a6bbef7601666379eaa885b115",
+          "classid": 142112890,
+          "courseid": "261555277",
+          "coursename": "高等数学（下）",
+          "imageUrl": "https://p.ananas.chaoxing.com/star3/origin/e51c27279962ea1b2771fbc6ab77dadd.png",
+          "isthirdaq": "0",
+          "teacherfactor": "***"
+        },
+        "logo": "https://mobilelearn.chaoxing.com/front/mobile/common/images/teachingPlan/qd3.png",
+        "msgStatus": 0,
+        "pcUrl": "https://mobilelearn.chaoxing.com/widget/sign/pcTeaSignController/proxyPcSign?activeId=6000159306540",
+        "subTitle": "05-06 09:57",
+        "title": "位置签到",
+        "toolbarType": 2,
+        "type": 1,
+        "url": "https://mobilelearn.chaoxing.com/newsign/preSign?courseId=261555277&classId=142112890&activePrimaryId=6000159306540&general=1&sys=1&ls=1&appType=15&"
+      },
+      "attachmentType": 15
+    }
+  },
+  "sourceMsg": "",
+  "time": "1778032661941",
+  "msgConfig": {},
+  "error": false,
+  "errorText": "",
+  "errorCode": 0
+}

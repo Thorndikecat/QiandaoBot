@@ -1,0 +1,37 @@
+{
+  "id": "1546108218718030952",
+  "type": "groupchat",
+  "contentsType": "TEXT",
+  "from": "298752034",
+  "to": "312619054465026",
+  "data": "[位置签到]",
+  "ext": {
+    "attachment": {
+      "att_chat_course": {
+        "logo": "https://mobilelearn.chaoxing.com/front/mobile/common/images/teachingPlan/qd3.png",
+        "msgStatus": 0,
+        "atypeName": "位置签到",
+        "general": "1",
+        "title": "位置签到",
+        "aid": 20525195,
+        "atype": 2,
+        "type": 1,
+        "toolbarType": 2,
+        "subTitle": "04-30 18:49",
+        "url": "https://mobilelearn.chaoxing.com/sign/preSign?courseId=null&classId=&activeId=20525195&chatId=312619054465026&general=0&ls=1"
+      },
+      "attachmentType": 15
+    },
+    "em_apns_ext": {
+      "em_huawei_push_badge_class": "com.chaoxing.mobile.activity.SplashActivity",
+      "em_push_title": "1"
+    },
+    "fromPuid": "344840592"
+  },
+  "sourceMsg": "[位置签到]",
+  "time": "1777546171740",
+  "msgConfig": null,
+  "error": false,
+  "errorText": "",
+  "errorCode": 0
+}
