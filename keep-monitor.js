@@ -6,8 +6,8 @@ const root = __dirname;
 const storagePath = path.join(root, 'apps', 'server', 'build', 'configs', 'storage.json');
 const monitorPath = path.join(root, 'apps', 'server', 'build', 'monitor.js');
 const credentialPath = path.join(root, 'keep-monitor.credentials.json');
-const defaultPhone = process.env.CHAOXING_DEFAULT_PHONE || '15886795013';
-const defaultLocation = process.env.CHAOXING_DEFAULT_LOCATION || '116.36,40.00/北京语言大学-主楼南';
+const defaultPhone = process.env.CHAOXING_DEFAULT_PHONE || '';
+const defaultLocation = process.env.CHAOXING_DEFAULT_LOCATION || '';
 
 const options = {
   userIndex: 0,
@@ -212,11 +212,15 @@ function writeStorage(storage) {
   fs.renameSync(tmpPath, storagePath);
 }
 
-function defaultMonitorConfig() {
+function defaultMonitorConfig(locationInput = '') {
   return {
     delay: 15,
-    presetAddress: [parseLocationInput(defaultLocation)],
+    presetAddress: locationInput ? [parseLocationInput(locationInput)] : [],
   };
+}
+
+function hasSavedUsers(storage) {
+  return Array.isArray(storage.users) && storage.users.length > 0;
 }
 
 function ensurePromptStartUser(storage) {
@@ -226,12 +230,13 @@ function ensurePromptStartUser(storage) {
 
   if (storage.users.length === 0) {
     storage.users.push({
-      phone: defaultPhone,
+      phone: defaultPhone || '',
       params: {},
-      monitor: defaultMonitorConfig(),
+      monitor: defaultMonitorConfig(defaultLocation),
       mailing: { enabled: false },
       cqserver: { cq_enabled: false },
     });
+    writeStorage(storage);
   }
 }
 
@@ -315,6 +320,15 @@ function applyLocationInput(storage, user, locationInput) {
   writeStorage(storage);
 }
 
+function applyFirstStartDetails(storage, user, credentials) {
+  if (!String(credentials.phone || '').trim()) {
+    fail('Phone is required for first startup.');
+  }
+
+  user.phone = String(credentials.phone).trim();
+  applyLocationInput(storage, user, credentials.location);
+}
+
 function loadBuiltUserFunctions() {
   const userFunctionsPath = path.join(root, 'apps', 'server', 'build', 'functions', 'user.js');
   if (!fs.existsSync(userFunctionsPath)) {
@@ -374,6 +388,11 @@ if (!fs.existsSync(storagePath)) {
 }
 
 let storage = loadStorage();
+if (!hasSavedUsers(storage) && !options.promptStart) {
+  console.log('[keep-monitor] No saved user found. Starting first-time setup.');
+  options.promptStart = true;
+}
+
 if (options.promptStart) {
   ensurePromptStartUser(storage);
 }
@@ -384,12 +403,13 @@ if (options.setCredentials) {
   process.exit(0);
 }
 
-const maskedPhone = maskPhone(user.phone);
 let credentials = null;
 try {
   if (options.promptStart) {
     credentials = promptStartDetails(user.phone, getDefaultLocationInput(user));
-    applyLocationInput(storage, user, credentials.location);
+    applyFirstStartDetails(storage, user, credentials);
+    storage = loadStorage();
+    user = getSelectedUser(storage, true);
   } else {
     credentials = options.promptLogin ? promptLoginCredentials(user.phone) : loadEncryptedCredentials();
   }
@@ -397,6 +417,7 @@ try {
   fail(`Could not load login credentials: ${error.message}`);
 }
 
+const maskedPhone = maskPhone(user.phone);
 console.log(`[keep-monitor] Root: ${root}`);
 console.log(`[keep-monitor] User: ${maskedPhone}`);
 console.log(`[keep-monitor] Restart delay: ${options.restartDelaySeconds} seconds`);

@@ -23,9 +23,9 @@ export const defaultConfig: UserConfig = {
     delay: 0,
     qrAutoFetch: false,
     presetAddress: [{
-      lon: '113.516288',
-      lat: '34.817038',
-      address: '安徽省蚌埠市蚌埠坦克学院'
+      lon: '',
+      lat: '',
+      address: ''
     }]
   },
   mailing: {

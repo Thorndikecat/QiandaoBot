@@ -1,72 +1,135 @@
 // ==UserScript==
-// @name         学习通随堂练习自动答题
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  自动从本地 chaoixng-signin 服务获取随机爬取的日志答案，并自动在页面上点选提交
+// @name         Chaoxing Practice Random Picker
+// @namespace    https://github.com/Thorndikecat/QiandaoBot
+// @version      1.1
+// @description  Randomly selects one visible option on Chaoxing practice/vote pages.
 // @match        *://mobilelearn.chaoxing.com/widget/pcvote/*
 // @match        *://mobilelearn.chaoxing.com/widget/vote/*
-// @grant        GM_xmlhttpRequest
-// @connect      localhost
+// @grant        none
 // @run-at       document-end
 // ==/UserScript==
 
-(function() {
-    'use strict';
+(function () {
+  'use strict';
 
-    // 本地服务端接口地址，请确保端口与您的 serve.ts 运行端口一致 (默认5000)
-    const API_URL = 'http://localhost:5000/practice/answer';
+  const AUTO_SUBMIT = true;
+  const MAX_WAIT_MS = 15000;
+  const CHECK_INTERVAL_MS = 500;
 
-    // 延时等待页面DOM渲染完成
-    setTimeout(() => {
-        console.log('[学习通助手] 正在向本地服务获取随堂练习答案...');
-        
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: API_URL,
-            onload: function(response) {
-                try {
-                    const res = JSON.parse(response.responseText);
-                    if (res.code === 200 && res.answer) {
-                        const answerText = res.answer.trim();
-                        console.log("[学习通助手] 成功获取到答案:", answerText);
-                        
-                        // 寻找页面上的选项元素 (视页面结构可能需要调整选择器)
-                        // 常规的随堂练习可能是 radio/checkbox label 或含有选项内容的 li 标签
-                        const optionsElements = document.querySelectorAll('label, .option, .answer, li');
-                        let clicked = false;
-                        
-                        optionsElements.forEach(opt => {
-                            const optText = opt.innerText || opt.textContent || '';
-                            if (optText.includes(answerText) || answerText.includes(optText.trim())) {
-                                opt.click();
-                                console.log('[学习通助手] 已自动选中选项:', optText);
-                                clicked = true;
-                            }
-                        });
+  const optionSelectors = [
+    'input[type="radio"]',
+    'input[type="checkbox"]',
+    '[role="radio"]',
+    '[role="checkbox"]',
+    'label',
+    '.option',
+    '.answer',
+    '.choice',
+    '.select',
+    'li',
+  ];
 
-                        if (clicked) {
-                            // 尝试自动点击提交按钮 (此处提供常见提交按钮选择器)
-                            setTimeout(() => {
-                                const submitBtns = document.querySelectorAll('a.btn-submit, button.submit, .submit-btn, [onclick*="submit"]');
-                                if(submitBtns.length > 0) {
-                                    // 自动交卷
-                                    submitBtns[0].click();
-                                    console.log('[学习通助手] 已自动点击提交交卷。');
-                                }
-                            }, 500);
-                        } else {
-                            console.log('[学习通助手] 未在页面上找到匹配的答案选项。');
-                        }
-                    } else {
-                        console.log("[学习通助手] 未获取到有效答案:", res.msg);
-                    }
-                } catch (e) {
-                    console.error("[学习通助手] 解析服务响应失败:", e);
-                }
-            },
-            onerror: function(err) {
-                console.error("[学习通助手] 请求本地服务失败，请检查服务是否运行在5000端口", err);
-            }
-        });
-    }, 2000); // 2秒延时，可根据电脑和网络速度调整
+  const submitSelectors = [
+    'button',
+    'a',
+    '[role="button"]',
+    '[onclick*="submit" i]',
+    '[class*="submit" i]',
+    '[id*="submit" i]',
+  ];
+
+  const isVisible = (element) => {
+    if (!element || element.disabled) return false;
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  };
+
+  const normalizeText = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+
+  const findClickableLabel = (input) => {
+    if (input.id) {
+      const label = document.querySelector(`label[for="${CSS.escape(input.id)}"]`);
+      if (label && isVisible(label)) return label;
+    }
+    return input.closest('label') || input;
+  };
+
+  const isOptionText = (text) => {
+    if (!text) return false;
+    if (text.length > 180) return false;
+    if (/提交|确定|完成|返回|查看|重做|submit|finish|back/i.test(text)) return false;
+    return true;
+  };
+
+  const findOptions = () => {
+    const candidates = [];
+    const seen = new Set();
+
+    for (const element of document.querySelectorAll(optionSelectors.join(','))) {
+      if (!isVisible(element)) continue;
+
+      let clickable = element;
+      let text = normalizeText(element.innerText || element.textContent || element.value);
+
+      if (element.matches('input[type="radio"], input[type="checkbox"]')) {
+        clickable = findClickableLabel(element);
+        text = normalizeText(clickable.innerText || clickable.textContent || element.value);
+      }
+
+      if (!isVisible(clickable) || !isOptionText(text)) continue;
+
+      const rect = clickable.getBoundingClientRect();
+      const key = `${Math.round(rect.left)}:${Math.round(rect.top)}:${text}`;
+      if (seen.has(key)) continue;
+
+      seen.add(key);
+      candidates.push({ clickable, text });
+    }
+
+    return candidates;
+  };
+
+  const findSubmitButton = () => {
+    for (const element of document.querySelectorAll(submitSelectors.join(','))) {
+      if (!isVisible(element)) continue;
+      const text = normalizeText(element.innerText || element.textContent || element.value);
+      if (/提交|确定|完成|投票|交卷|submit|finish/i.test(text)) {
+        return element;
+      }
+    }
+    return null;
+  };
+
+  const clickRandomOption = () => {
+    const options = findOptions();
+    if (!options.length) return false;
+
+    const selected = options[Math.floor(Math.random() * options.length)];
+    selected.clickable.click();
+    selected.clickable.dispatchEvent(new Event('change', { bubbles: true }));
+    console.log('[QiandaoBot] Random practice option selected:', selected.text);
+
+    if (AUTO_SUBMIT) {
+      setTimeout(() => {
+        const submitButton = findSubmitButton();
+        if (submitButton) {
+          submitButton.click();
+          console.log('[QiandaoBot] Practice submitted.');
+        } else {
+          console.log('[QiandaoBot] Submit button was not found.');
+        }
+      }, 500);
+    }
+
+    return true;
+  };
+
+  const startedAt = Date.now();
+  const timer = window.setInterval(() => {
+    if (clickRandomOption() || Date.now() - startedAt > MAX_WAIT_MS) {
+      window.clearInterval(timer);
+    }
+  }, CHECK_INTERVAL_MS);
 })();
