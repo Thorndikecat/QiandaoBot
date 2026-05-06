@@ -1,8 +1,17 @@
+interface AddressItem {
+  lon: string;
+  lat: string;
+  address: string;
+}
+
 interface MonitorConfig {
   delay: number;
   lon: number;
   lat: number;
   address: string;
+  altitude?: string;
+  qrAutoFetch?: boolean;
+  presetAddress?: AddressItem[];
 }
 
 interface MailConfig {

@@ -157,6 +157,20 @@ export const RenderConfig: renderConfigType = (props) => {
             fullWidth
             variant="outlined"
           />
+          <FormGroup sx={{ flexDirection: 'row' }}>
+            <FormControlLabel
+              label="自动获取二维码（实验性功能，未验证，默认关闭）"
+              control={
+                <Switch checked={config.monitor.qrAutoFetch}
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                    setConfig(prev => {
+                      return { ...prev, monitor: { ...prev.monitor, qrAutoFetch: event.target.checked } };
+                    });
+                  }}
+                />
+              }
+            />
+          </FormGroup>
           {
             presetAddress.map((preset, i) => {
               return (

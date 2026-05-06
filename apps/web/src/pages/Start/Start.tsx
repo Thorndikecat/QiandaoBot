@@ -21,6 +21,7 @@ export enum DialogChoice {
 export const defaultConfig: UserConfig = {
   monitor: {
     delay: 0,
+    qrAutoFetch: false,
     presetAddress: [{
       lon: '113.516288',
       lat: '34.817038',

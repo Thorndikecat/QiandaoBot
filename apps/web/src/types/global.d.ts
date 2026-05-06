@@ -34,6 +34,7 @@ type PresetAddress = AddressItem[];
 interface MonitorConfig {
   delay: number;
   presetAddress: PresetAddress;
+  qrAutoFetch: boolean;
 }
 
 interface MailingConfig {
