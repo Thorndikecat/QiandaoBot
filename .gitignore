@@ -33,6 +33,7 @@ yarn-error.log*
 keep-monitor.credentials.json
 logs/practice-options.log
 logs/last_practice_page.html
+logs/page-snapshots/
 
 # turbo
 .turbo

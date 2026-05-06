@@ -1,4 +1,5 @@
 import { ACTIVELIST, ANALYSIS, ANALYSIS2, CHAT_GROUP, PPTACTIVEINFO, PRESIGN } from '../configs/api';
+import { safeWritePageSnapshot } from '../utils/pageSnapshot';
 import { cookieSerialize, request } from '../utils/request';
 
 /**
@@ -99,8 +100,9 @@ export const getPPTActiveInfo = async ({ activeId, ...cookies }: BasicCookie & {
 // 预签到请求
 export const preSign = async (args: BasicCookie & { activeId: string; courseId: string; classId: string; }) => {
   const { activeId, classId, courseId, ...cookies } = args;
-  await request(
-    `${PRESIGN.URL}?courseId=${courseId}&classId=${classId}&activePrimaryId=${activeId}&general=1&sys=1&ls=1&appType=15&&tid=&uid=${args._uid}&ut=s`,
+  const preSignUrl = `${PRESIGN.URL}?courseId=${courseId}&classId=${classId}&activePrimaryId=${activeId}&general=1&sys=1&ls=1&appType=15&&tid=&uid=${args._uid}&ut=s`;
+  const preSignResult = await request(
+    preSignUrl,
     {
       headers: {
         Cookie: cookieSerialize(cookies),
@@ -110,8 +112,9 @@ export const preSign = async (args: BasicCookie & { activeId: string; courseId: 
   console.log('[预签]已请求');
 
   // analysis
+  const analysisUrl = `${ANALYSIS.URL}?vs=1&DB_STRATEGY=RANDOM&aid=${activeId}`;
   const analysisResult = await request(
-    `${ANALYSIS.URL}?vs=1&DB_STRATEGY=RANDOM&aid=${activeId}`,
+    analysisUrl,
     {
       headers: {
         Cookie: cookieSerialize(cookies),
@@ -125,8 +128,9 @@ export const preSign = async (args: BasicCookie & { activeId: string; courseId: 
   code = code.substring(0, code_end);
 
   // analysis2
+  const analysis2Url = `${ANALYSIS2.URL}?DB_STRATEGY=RANDOM&code=${code}`;
   const analysis2Result = await request(
-    `${ANALYSIS2.URL}?DB_STRATEGY=RANDOM&code=${code}`,
+    analysis2Url,
     {
       headers: {
         Cookie: cookieSerialize(cookies),
@@ -134,6 +138,22 @@ export const preSign = async (args: BasicCookie & { activeId: string; courseId: 
     }
   );
   console.log(`analysis 请求结果：${analysis2Result.data}`);
+
+  safeWritePageSnapshot({
+    kind: 'signin',
+    activeId,
+    url: preSignUrl,
+    html: String(preSignResult.data || ''),
+    metadata: {
+      source: 'course-presign',
+      courseId,
+      classId,
+      apiUrls: [preSignUrl, analysisUrl, analysis2Url],
+      analysisCode: code,
+      analysis2StatusCode: analysis2Result.statusCode,
+      analysis2Response: String(analysis2Result.data || '').slice(0, 4000),
+    },
+  });
 
   // sleep for 500ms.
   await new Promise<void>(resolve =>
@@ -145,8 +165,9 @@ export const preSign = async (args: BasicCookie & { activeId: string; courseId: 
 
 export const preSign2 = async (args: BasicCookie & { activeId: string; chatId: string; _uid: string; tuid: string; }) => {
   const { activeId, chatId, tuid, ...cookies } = args;
+  const preSignUrl = `${CHAT_GROUP.PRESTUSIGN.URL}?activeId=${activeId}&code=&uid=${cookies._uid}&courseId=null&classId=0&general=0&chatId=${chatId}&appType=0&tid=${tuid}&atype=null&sys=0`;
   const result = await request(
-    `${CHAT_GROUP.PRESTUSIGN.URL}?activeId=${activeId}&code=&uid=${cookies._uid}&courseId=null&classId=0&general=0&chatId=${chatId}&appType=0&tid=${tuid}&atype=null&sys=0`,
+    preSignUrl,
     {
       headers: {
         Cookie: cookieSerialize(cookies),
@@ -154,6 +175,17 @@ export const preSign2 = async (args: BasicCookie & { activeId: string; chatId: s
     }
   );
   console.log('[预签]已请求');
+  safeWritePageSnapshot({
+    kind: 'signin',
+    activeId,
+    url: preSignUrl,
+    html: String(result.data || ''),
+    metadata: {
+      source: 'group-presign',
+      chatId,
+      apiUrls: [preSignUrl],
+    },
+  });
   return result.data;
 };
 

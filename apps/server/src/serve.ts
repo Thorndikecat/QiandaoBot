@@ -12,6 +12,7 @@ import { QRCodeSign } from './functions/qrcode';
 import { QrCodeScan } from './functions/tencent.qrcode';
 import { getAccountInfo, getCourses, getPanToken, userLogin } from './functions/user';
 import { getJsonObject } from './utils/file';
+import { writePageSnapshot } from './utils/pageSnapshot';
 import fs from 'fs';
 import path from 'path';
 const ENVJSON = getJsonObject('env.json');
@@ -19,6 +20,15 @@ const ENVJSON = getJsonObject('env.json');
 const app = new Koa();
 const router = new Router();
 const processMap = new Map<string, ChildProcess>();
+
+const isChaoxingUrl = (value: string): boolean => {
+  try {
+    const hostname = new URL(value).hostname;
+    return hostname === 'chaoxing.com' || hostname.endsWith('.chaoxing.com');
+  } catch {
+    return false;
+  }
+};
 
 router.get('/', async (ctx) => {
   ctx.body = '<h1 style="text-align: center">Welcome, chaoxing-sign-cli API service is running.</h1>';
@@ -266,6 +276,32 @@ router.post('/qrocr', async (ctx) => {
 });
 
 // 200:监听中，201:未监听，202:登录失败
+router.post('/debug/page-snapshot', async (ctx) => {
+  const body = ctx.request.body as any;
+  const url = String(body?.url || '');
+  if (!isChaoxingUrl(url)) {
+    ctx.status = 400;
+    ctx.body = { code: 400, msg: 'Only Chaoxing page snapshots are accepted' };
+    return;
+  }
+
+  const result = writePageSnapshot({
+    kind: body.kind || 'browser',
+    activeId: body.activeId,
+    url,
+    html: typeof body.html === 'string' ? body.html : '',
+    metadata: {
+      source: 'browser',
+      title: body.title,
+      userAgent: body.userAgent,
+      capturedBy: body.capturedBy,
+    },
+    structure: body.structure,
+  });
+
+  ctx.body = { code: 200, msg: 'saved', ...result };
+});
+
 router.get('/monitor/status/:phone', (ctx) => {
   // 状态为正在监听
   if (processMap.get(ctx.params.phone)) {
@@ -321,7 +357,12 @@ router.post('/monitor/start/:phone', async (ctx) => {
   ctx.body = response;
 });
 
-app.use(bodyparser({ enableTypes: ['json', 'form', 'text'] }));
+app.use(bodyparser({
+  enableTypes: ['json', 'form', 'text'],
+  jsonLimit: '2mb',
+  formLimit: '2mb',
+  textLimit: '2mb',
+}));
 app.use(async (ctx, next) => {
   await next();
   ctx.set('Access-Control-Allow-Origin', '*');

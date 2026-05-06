@@ -3,6 +3,7 @@ import { JSDOM } from 'jsdom';
 import os from 'os';
 import path from 'path';
 import { getChatCourseAttachment } from '../utils/imMessage';
+import { safeWritePageSnapshot } from '../utils/pageSnapshot';
 import { cookieSerialize, request } from '../utils/request';
 
 const PracticeLogPath = path.resolve(__dirname, '../../../../logs/practice-options.log');
@@ -271,10 +272,35 @@ export const handlePracticeMessage = async (message: any, params: BasicCookie) =
   let options = extractOptionsFromObject(message);
   let pageHtml = '';
 
-  if (options.length < 2 && attachment.url) {
+  safeWritePageSnapshot({
+    kind: 'practice',
+    activeId: attachment.aid,
+    url: attachment.url,
+    metadata: {
+      source: 'im-message',
+      attachment,
+      messageKeys: Object.keys(message || {}),
+      extractedOptions: options.slice(0, 20),
+    },
+  });
+
+  if (attachment.url) {
     try {
       pageHtml = await fetchPracticePage(attachment.url, params);
-      options = extractOptionsFromHtml(pageHtml);
+      const pageOptions = extractOptionsFromHtml(pageHtml);
+      if (pageOptions.length >= 2) options = pageOptions;
+      safeWritePageSnapshot({
+        kind: 'practice',
+        activeId: attachment.aid,
+        url: attachment.url,
+        html: pageHtml,
+        metadata: {
+          source: 'practice-page',
+          attachment,
+          extractedOptions: options.slice(0, 20),
+          optionCount: options.length,
+        },
+      });
       
       // 保存页面源码供后续分析真实提交 API 使用
       try {
