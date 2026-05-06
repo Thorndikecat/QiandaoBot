@@ -30,7 +30,7 @@
 | `aid` 格式 | **8 位数字** | **13 位数字** |
 | `att_chat_course.url` | `/sign/preSign?courseId=null&...` | `/newsign/preSign?courseId=xxx&classId=xxx&...` |
 | 签到端点 | `POST /sign/stuSignajax` | `GET /pptSign/stuSignajax` |
-| `courseInfo` | 无 | **有**（courseId, classId, coursename, teacherfactor） |
+| `courseInfo` | 无 | **有**（courseid, classid, coursename, teacherfactor）**均为小写** |
 | `pcUrl` | 无 | **有**（`proxyPcSign`） |
 | 预签流程 | `preStuSign`（一次） | `preSign` + `analysis` + `analysis2`（三次） |
 
@@ -58,7 +58,7 @@
 | `title` | 活动标题 | 活动标题 | |
 | `type` | 1 | 1 | |
 | `url` | `/sign/preSign?...` | `/newsign/preSign?...` | 签到页面URL |
-| `courseInfo` | 不存在 | **存在** | 含 courseId/classId/coursename/imageUrl/teacherfactor |
+| `courseInfo` | 不存在 | **存在** | 含 courseid/classid/coursename/imageUrl/teacherfactor（均为小写） |
 | `pcUrl` | 不存在 | **存在** | 教师端PC签到页 |
 
 ## PPTActiveInfo（课程签到独有）
