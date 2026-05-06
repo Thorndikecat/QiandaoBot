@@ -14,7 +14,7 @@
   "data": "消息文本（如 [签到]、二维码签到）",
   "ext": {
     "attachment": "JSON字符串 或 已解析对象",  // ⚠️ 来自他人的消息为字符串
-    "fromPuid": "发送者 puid（课程签到为 null）"  // ⚠️ 课程vs群聊差异
+    "fromPuid": "发送者 puid（课程签到时该字段不存在）"  // ⚠️ 课程vs群聊差异
   },
   "time": "时间戳"
 }
@@ -25,7 +25,7 @@
 | 维度 | 群聊签到 | 课程签到 |
 |------|---------|---------|
 | `from` | 用户 tuid（创建者） | 系统 tuid（如 `86655542`） |
-| `fromPuid` | 有值（如 `369740861`） | **null** |
+| `fromPuid` | 有值（如 `369740861`） | 字段不存在 |
 | `to` (聊天室) | 群聊ID（如 `312619054465026`） | 课程聊天室ID（如 `308065766277123`） |
 | `aid` 格式 | **8 位数字** | **13 位数字** |
 | `att_chat_course.url` | `/sign/preSign?courseId=null&...` | `/newsign/preSign?courseId=xxx&classId=xxx&...` |
