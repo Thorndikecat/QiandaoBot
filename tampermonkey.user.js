@@ -3,11 +3,7 @@
 // @namespace    https://github.com/Thorndikecat/QiandaoBot
 // @version      1.2
 // @description  Captures Chaoxing sign/practice page structure and randomly selects one practice option.
-// @match        *://mobilelearn.chaoxing.com/widget/pcvote/*
-// @match        *://mobilelearn.chaoxing.com/widget/vote/*
-// @match        *://mobilelearn.chaoxing.com/newsign/*
-// @match        *://mobilelearn.chaoxing.com/sign/*
-// @match        *://mobilelearn.chaoxing.com/pptSign/*
+// @match        *://mobilelearn.chaoxing.com/*
 // @grant        none
 // @run-at       document-start
 // ==/UserScript==
@@ -173,7 +169,7 @@
 
   const detectKind = () => {
     const text = `${window.location.pathname} ${document.title}`.toLowerCase();
-    if (/vote|practice|question|quiz|work|pcvote/.test(text)) return 'practice';
+    if (/ppttestpaper|vote|practice|question|quiz|work|pcvote/.test(text)) return 'practice';
     if (/sign/.test(text)) return 'signin';
     return 'browser';
   };
@@ -296,7 +292,8 @@
   installNetworkHooks();
 
   const start = () => {
-    if (detectKind() === 'practice') {
+    const kind = detectKind();
+    if (kind === 'practice') {
       const startedAt = Date.now();
       const timer = window.setInterval(() => {
         if (clickRandomOption() || Date.now() - startedAt > MAX_WAIT_MS) {
@@ -304,7 +301,7 @@
           void sendSnapshotOnce('practice-timeout-or-finished');
         }
       }, CHECK_INTERVAL_MS);
-    } else {
+    } else if (kind === 'signin') {
       window.setTimeout(() => {
         void sendSnapshotOnce('signin-page-ready');
       }, 3000);

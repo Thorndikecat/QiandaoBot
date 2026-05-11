@@ -93,6 +93,17 @@ const uniqueOptions = (options: string[]): string[] => {
   return result;
 };
 
+const tryParseJson = (value: string): unknown | null => {
+  const text = value.trim();
+  if (!text || !/^[{\[]/.test(text)) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
 const isOptionLike = (value: string): boolean => (
   /^[A-H][.、．\s]/i.test(value)
   || /^[（(]?[A-H][）)]/.test(value)
@@ -139,6 +150,8 @@ const extractOptionsFromObject = (value: unknown, depth = 0): string[] => {
   if (depth > 6 || value === null || value === undefined) return [];
 
   if (typeof value === 'string') {
+    const parsed = tryParseJson(value);
+    if (parsed) return extractOptionsFromObject(parsed, depth + 1);
     return extractOptionsFromText(value);
   }
 
@@ -170,7 +183,23 @@ const extractOptionsFromObject = (value: unknown, depth = 0): string[] => {
   return uniqueOptions(Object.values(record).flatMap(item => extractOptionsFromObject(item, depth + 1)));
 };
 
+const extractOptionsFromInlineQuizList = (html: string): string[] => {
+  const options: string[] = [];
+  const assignmentPattern = /this\.quizList\s*=\s*(\[[\s\S]*?\]);/g;
+
+  for (const match of html.matchAll(assignmentPattern)) {
+    const quizList = tryParseJson(match[1]);
+    if (!Array.isArray(quizList)) continue;
+    options.push(...extractOptionsFromObject(quizList));
+  }
+
+  return uniqueOptions(options);
+};
+
 const extractOptionsFromHtml = (html: string): string[] => {
+  const inlineQuizOptions = extractOptionsFromInlineQuizList(html);
+  if (inlineQuizOptions.length >= 2) return inlineQuizOptions;
+
   const dom = new JSDOM(html);
   const document = dom.window.document;
   const options: string[] = [];
