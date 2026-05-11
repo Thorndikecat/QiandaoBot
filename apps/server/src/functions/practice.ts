@@ -66,6 +66,18 @@ type PracticeAttachment = {
   };
 };
 
+type PracticePageData = {
+  activeId: string;
+  courseId: string;
+  classId: string;
+  quizList: any[];
+};
+
+type PreparedPracticeAnswer = {
+  quizList: any[];
+  selectedOptions: string[];
+};
+
 const normalizeText = (value: unknown): string => String(value || '')
   .replace(/<[^>]+>/g, ' ')
   .replace(/&nbsp;/g, ' ')
@@ -196,6 +208,47 @@ const extractOptionsFromInlineQuizList = (html: string): string[] => {
   return uniqueOptions(options);
 };
 
+const extractInlineStringVar = (html: string, name: string): string => {
+  const match = html.match(new RegExp(`var\\s+${name}\\s*=\\s*["']([^"']+)["']`));
+  return match?.[1] || '';
+};
+
+const getUrlParam = (url: string | undefined, name: string): string => {
+  if (!url) return '';
+
+  try {
+    return new URL(normalizeUrl(url)).searchParams.get(name) || '';
+  } catch {
+    return '';
+  }
+};
+
+const extractInlineQuizList = (html: string): any[] => {
+  const match = html.match(/this\.quizList\s*=\s*(\[[\s\S]*?\]);/);
+  const quizList = match ? tryParseJson(match[1]) : null;
+  return Array.isArray(quizList) ? quizList : [];
+};
+
+const extractPracticePageData = (html: string, attachment: PracticeAttachment): PracticePageData | null => {
+  const quizList = extractInlineQuizList(html);
+  if (!quizList.length) return null;
+
+  const activeId = extractInlineStringVar(html, 'activeId')
+    || String(attachment.aid || '')
+    || getUrlParam(attachment.url, 'activeId')
+    || getUrlParam(attachment.url, 'activePrimaryId');
+  const courseId = extractInlineStringVar(html, 'courseId')
+    || attachment.courseInfo?.courseid
+    || getUrlParam(attachment.url, 'courseId');
+  const classId = extractInlineStringVar(html, 'classId')
+    || attachment.courseInfo?.classid
+    || getUrlParam(attachment.url, 'classId');
+
+  if (!activeId || !courseId || !classId) return null;
+
+  return { activeId, courseId, classId, quizList };
+};
+
 const extractOptionsFromHtml = (html: string): string[] => {
   const inlineQuizOptions = extractOptionsFromInlineQuizList(html);
   if (inlineQuizOptions.length >= 2) return inlineQuizOptions;
@@ -290,6 +343,109 @@ const writeChoiceLog = (option: string) => {
   fs.appendFileSync(PracticeLogPath, `${option.replace(/[\r\n]+/g, ' ')}${os.EOL}`, 'utf8');
 };
 
+const getQuestionOptions = (question: any): any[] => {
+  if (Array.isArray(question?.answer)) return question.answer;
+  if (typeof question?.options === 'string') {
+    const parsed = tryParseJson(question.options);
+    if (Array.isArray(parsed)) return parsed;
+  }
+  if (Array.isArray(question?.options)) return question.options;
+  return [];
+};
+
+const chooseRandomItems = <T>(items: T[], count: number): T[] => {
+  const pool = [...items];
+  const result: T[] = [];
+
+  while (pool.length && result.length < count) {
+    const index = Math.floor(Math.random() * pool.length);
+    result.push(pool.splice(index, 1)[0]);
+  }
+
+  return result;
+};
+
+const preparePracticeAnswer = (quizList: any[]): PreparedPracticeAnswer | null => {
+  const payload = JSON.parse(JSON.stringify(quizList));
+  const selectedOptions: string[] = [];
+
+  for (const question of payload) {
+    const type = Number(question?.type);
+    if (![0, 1, 3, 16].includes(type)) continue;
+
+    const options = getQuestionOptions(question)
+      .map(option => String(option?.name || '').trim())
+      .filter(Boolean);
+    if (!options.length) continue;
+
+    if (!question.personAnswer || typeof question.personAnswer !== 'object') {
+      question.personAnswer = {};
+    }
+
+    if (type === 1) {
+      const min = Number(question.answerLimitMap?.min || 1);
+      const max = Number(question.answerLimitMap?.max || options.length);
+      const count = Math.max(1, Math.min(options.length, Math.max(min, Math.min(max, min))));
+      const selected = chooseRandomItems(options, count).sort();
+      const allLetterOptions = selected.every(option => /^[A-Za-z]$/.test(option));
+      question.personAnswer.myoption = allLetterOptions ? selected.join('') : selected.join(',');
+      selectedOptions.push(question.personAnswer.myoption);
+    } else {
+      const selected = options[Math.floor(Math.random() * options.length)];
+      question.personAnswer.myoption = selected;
+      selectedOptions.push(selected);
+    }
+  }
+
+  return selectedOptions.length ? { quizList: payload, selectedOptions } : null;
+};
+
+const submitPracticeAnswer = async (
+  pageData: PracticePageData,
+  preparedAnswer: PreparedPracticeAnswer,
+  cookies: BasicCookie,
+): Promise<boolean> => {
+  const submitUrl = normalizeUrl(`/v2/apis/studentQuestion/doQuestionAnswering?activeId=${encodeURIComponent(pageData.activeId)}&courseId=${encodeURIComponent(pageData.courseId)}&classId=${encodeURIComponent(pageData.classId)}&DB_STRATEGY=PRIMARY_KEY&STRATEGY_PARA=activeId`);
+  const submitResult = await request(submitUrl, {
+    method: 'POST',
+    headers: {
+      Cookie: cookieSerialize(cookies),
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0',
+      Referer: normalizeUrl(`/pptTestPaper/preAddQuestion2quiz?classId=${encodeURIComponent(pageData.classId)}&activePrimaryId=${encodeURIComponent(pageData.activeId)}&chatId=null&appType=15&isclasschat=1`),
+    },
+  }, JSON.stringify(preparedAnswer.quizList));
+
+  let submitData: any = {};
+  try {
+    submitData = JSON.parse(String(submitResult.data || '{}'));
+  } catch {
+    submitData = {};
+  }
+
+  if (submitData.result !== 1) {
+    console.log(`[随堂练习] 提交失败：${submitData.errorMsg || submitResult.data || submitResult.statusCode}`);
+    return false;
+  }
+
+  const receiptParams = new URLSearchParams({
+    classId: pageData.classId,
+    activePrimaryId: pageData.activeId,
+    uid: String((cookies as any)._uid || ''),
+    chatId: 'null',
+    appType: '15',
+    openChatView: 'false',
+  });
+  await request(normalizeUrl(`/pptTestPaperStu/answerReceipt?${receiptParams.toString()}`), {
+    headers: {
+      Cookie: cookieSerialize(cookies),
+      'User-Agent': 'Mozilla/5.0',
+    },
+  });
+
+  return true;
+};
+
 export const handlePracticeMessage = async (message: any, params: BasicCookie) => {
   const attachment = getAttachment(message);
   if (!attachment) return;
@@ -300,6 +456,7 @@ export const handlePracticeMessage = async (message: any, params: BasicCookie) =
 
   let options = extractOptionsFromObject(message);
   let pageHtml = '';
+  let pageData: PracticePageData | null = null;
 
   safeWritePageSnapshot({
     kind: 'practice',
@@ -318,6 +475,7 @@ export const handlePracticeMessage = async (message: any, params: BasicCookie) =
       pageHtml = await fetchPracticePage(attachment.url, params);
       const pageOptions = extractOptionsFromHtml(pageHtml);
       if (pageOptions.length >= 2) options = pageOptions;
+      pageData = extractPracticePageData(pageHtml, attachment);
       safeWritePageSnapshot({
         kind: 'practice',
         activeId: attachment.aid,
@@ -350,7 +508,28 @@ export const handlePracticeMessage = async (message: any, params: BasicCookie) =
     return;
   }
 
-  const selected = options[Math.floor(Math.random() * options.length)];
-  writeChoiceLog(selected);
-  console.log(`[随堂练习] 已随机记录 1 个选项到 ${PracticeLogPath}`);
+  if (!pageData) {
+    const selected = options[Math.floor(Math.random() * options.length)];
+    writeChoiceLog(selected);
+    console.log(`[随堂练习] 已随机记录 1 个选项到 ${PracticeLogPath}`);
+    console.log('[随堂练习] 未解析到可提交的页面题目结构，已跳过自动提交。');
+    return;
+  }
+
+  const preparedAnswer = preparePracticeAnswer(pageData.quizList);
+  if (!preparedAnswer) {
+    const selected = options[Math.floor(Math.random() * options.length)];
+    writeChoiceLog(selected);
+    console.log(`[随堂练习] 已随机记录 1 个选项到 ${PracticeLogPath}`);
+    console.log('[随堂练习] 未找到可自动提交的客观题答案结构，已跳过自动提交。');
+    return;
+  }
+
+  writeChoiceLog(preparedAnswer.selectedOptions.join(', '));
+  console.log(`[随堂练习] 已随机记录实际提交选项到 ${PracticeLogPath}`);
+
+  const submitted = await submitPracticeAnswer(pageData, preparedAnswer, params);
+  if (submitted) {
+    console.log(`[随堂练习] 已自动提交选项：${preparedAnswer.selectedOptions.join(', ')}`);
+  }
 };
