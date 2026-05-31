@@ -2,10 +2,10 @@
 
 ## 拉取镜像
 
-下载docker镜像，国内站点会比较慢
+发布 Release 或手动运行 Docker-CI 后，可下载本仓库的 Docker 镜像。国内站点会比较慢。
 
 ```dockerfile
-docker pull ghcr.io/cxorz/chaoxing-sign-cli:latest
+docker pull ghcr.io/thorndikecat/qiandaobot:latest
 ```
 
 （待更新国内站点）
@@ -13,7 +13,7 @@ docker pull ghcr.io/cxorz/chaoxing-sign-cli:latest
 ## 本机部署
 
 ```dockerfile
-docker run --name chaoxing -d -p 80:80 -p 5000:5000 chaoxing-sign-cli
+docker run --name chaoxing -d -p 80:80 -p 5000:5000 ghcr.io/thorndikecat/qiandaobot:latest
 ```
 
 你可以直接通过这个方式创建一个容器，然后使用服务器的IP访问，但直接暴露你服务器的公网IP并不安全（局域网服务器除外），且IP地址不方便记忆，你可以使用一个域名来指向他。
@@ -25,7 +25,7 @@ docker run --name chaoxing -d -p 80:80 -p 5000:5000 chaoxing-sign-cli
 如果你应用如下的解决方案，请不要使用上面的部署指令。一般使用：
 
 ```dockerfile
-docker run --name chaoxing -d --network 你的网桥 chaoxing-sign-cli
+docker run --name chaoxing -d --network 你的网桥 ghcr.io/thorndikecat/qiandaobot:latest
 ```
 
 也就是说不需要进行端口映射，但你必须把这个容器加入网桥，Docker提供了一个默认的网桥`Bridge`
@@ -33,7 +33,7 @@ docker run --name chaoxing -d --network 你的网桥 chaoxing-sign-cli
 为了方便，最好同时指定这个容器的IP，否则服务器重启或容器重启后可能导致IP发生变化
 
 ```dockerfile
-docker run --name chaoxing -d --network 你的网桥 --ip 你的容器IP chaoxing-sign-cli
+docker run --name chaoxing -d --network 你的网桥 --ip 你的容器IP ghcr.io/thorndikecat/qiandaobot:latest
 ```
 
 还有一些复杂的指令例如`--restart`你可以按需使用
@@ -143,7 +143,7 @@ server {
 	等待构建完成后访问前端进行测试即可。
 	
 ## 排障
-如果你在宿舍使用路由器或者虚拟机之类的方法部署了该容器，目前一个已知的故障[#172](https://github.com/cxOrz/chaoxing-sign-cli/issues/172)，是每次断网（但不重启机器）后会导致容器工作异常。
+如果你在宿舍使用路由器或者虚拟机之类的方法部署了该容器，断网（但不重启机器）后可能导致容器工作异常。若遇到类似问题，请在[本仓库 issue 区](https://github.com/Thorndikecat/QiandaoBot/issues)查找或反馈。
 一般只需要重启容器即可
 ```docker
 docker restart chaoxing

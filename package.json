@@ -14,7 +14,7 @@
     "monitor": "node ./apps/server/build/monitor.js",
     "lint": "turbo run lint"
   },
-  "repository": "https://github.com/cxOrz/chaoxing-sign-cli.git",
+  "repository": "https://github.com/Thorndikecat/QiandaoBot.git",
   "author": "mcx",
   "license": "MIT",
   "engines": {

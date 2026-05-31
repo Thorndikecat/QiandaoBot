@@ -31,7 +31,7 @@ const isChaoxingUrl = (value: string): boolean => {
 };
 
 router.get('/', async (ctx) => {
-  ctx.body = '<h1 style="text-align: center">Welcome, chaoxing-sign-cli API service is running.</h1>';
+  ctx.body = '<h1 style="text-align: center">Welcome, QiandaoBot API service is running.</h1>';
 });
 
 router.post('/login', async (ctx) => {

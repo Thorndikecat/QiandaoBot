@@ -3,9 +3,11 @@
 ![NodeJS](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
-![Licence](https://img.shields.io/github/license/cxOrz/chaoxing-signin?style=for-the-badge)
+![License](https://img.shields.io/github/license/Thorndikecat/QiandaoBot?style=for-the-badge)
 
 基于 Nodejs 实现的一个命令行签到工具，在此基础上使用 React.js + Material UI + Koa 扩展成为 Web 项目。
+
+> 当前维护分支：https://github.com/Thorndikecat/QiandaoBot
 
 **功能**： 普通签到、拍照签到、手势签到、位置签到、签到码签到、二维码签到，多用户凭据储存，IM 协议自动签到。
 
@@ -22,13 +24,13 @@
 将仓库克隆到本地
 
 ```bash
-git clone https://github.com/cxOrz/chaoxing-signin.git
+git clone https://github.com/Thorndikecat/QiandaoBot.git
 ```
 
 进入项目文件夹，并安装依赖
 
 ```bash
-cd chaoxing-signin
+cd QiandaoBot
 pnpm install
 ```
 
@@ -72,7 +74,7 @@ pnpm start
 
 ### 二维码签到
 
-在运行之前需要做些准备，请找一位挚友，拍一张二维码的照片，识别二维码，得到一个字符串，复制其中的 `enc` 参数值，例如 `1D0A628CK317F44CCC378M5KD92`，询问时填入。若使用 UI 仓库的项目(查看`高级`)，可以直接选择图片并自动解析得到enc参数。如果遇到10s变换的二维码，参考 [#178](https://github.com/cxOrz/chaoxing-signin/issues/178)
+在运行之前需要做些准备，请找一位挚友，拍一张二维码的照片，识别二维码，得到一个字符串，复制其中的 `enc` 参数值，例如 `1D0A628CK317F44CCC378M5KD92`，询问时填入。若使用 UI 仓库的项目(查看`高级`)，可以直接选择图片并自动解析得到enc参数。如果遇到10s变换的二维码，请在[本仓库 issue 区](https://github.com/Thorndikecat/QiandaoBot/issues)查找或反馈相关问题。
 
 ### 位置签到
 
@@ -107,11 +109,11 @@ pnpm start
 
 方案一：根目录下执行 `pnpm dev` 将运行前后端服务，并在浏览器弹出项目首页，注意这是开发模式！
 
-方案二：用提供的 Docker 镜像，运行后可通过 IP 访问。
+方案二：发布 Release 或手动运行 Docker-CI 后，可使用本仓库的 Docker 镜像，运行后可通过 IP 访问。
 
 ```bash
-docker pull ghcr.io/cxorz/chaoxing-signin:latest
-docker run -d -p 80:80 -p 5000:5000 ghcr.io/cxorz/chaoxing-signin
+docker pull ghcr.io/thorndikecat/qiandaobot:latest
+docker run -d -p 80:80 -p 5000:5000 ghcr.io/thorndikecat/qiandaobot:latest
 ```
 
 > 出现问题？先仔细阅读相关说明，若仍无法解决请发 issue

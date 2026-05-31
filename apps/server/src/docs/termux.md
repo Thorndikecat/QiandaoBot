@@ -27,6 +27,6 @@ corepack enable
 corepack prepare pnpm@latest --activate
 ```
 
-此时，Node 环境已经配置好。之后的步骤就是拉取项目，运行项目了，请回到[主页](https://github.com/cxOrz/chaoxing-sign-cli)查看如何操作。
+此时，Node 环境已经配置好。之后的步骤就是拉取项目，运行项目了，请回到[主页](https://github.com/Thorndikecat/QiandaoBot)查看如何操作。
 
 > 安卓环境下无法安装 turbo 依赖，需先移除它 `pnpm remove turbo`，再运行 `pnpm install` 即可正常完成其他依赖安装。这种情况下无法在根目录运行命令，需要进入 `apps/server` 或 `apps/web` 来运行对应项目的命令。

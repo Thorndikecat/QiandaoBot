@@ -23,7 +23,7 @@ pnpm start
 部署在服务器，步骤如下：
 
 1. 安装 Node 环境，推荐使用 LTS 版本
-2. 克隆代码 `git clone https://github.com/cxOrz/chaoxing-sign-cli.git`
+2. 克隆代码 `git clone https://github.com/Thorndikecat/QiandaoBot.git`
 3. 进入项目目录，安装依赖
 4. 配置项目的 env.json 文件（可选）
 5. 转译源码 `pnpm build`
