@@ -35,6 +35,104 @@ Object.defineProperty(globalThis, 'location', {
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const webIM = require('./utils/websdk3.1.4.js').default;
+const MonitorLogPath = path.resolve(__dirname, '../../../logs/monitor.log');
+const originalConsoleLog = console.log.bind(console);
+const originalConsoleError = console.error.bind(console);
+
+const formatLogValue = (value: unknown): string => {
+  if (value instanceof Error) return value.stack || value.message;
+  if (typeof value === 'string') return value;
+
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch (error) {
+    return String(value);
+  }
+};
+
+const appendMonitorLog = (...args: unknown[]) => {
+  try {
+    fs.mkdirSync(path.dirname(MonitorLogPath), { recursive: true });
+    const line = `[${new Date().toISOString()}] ${args.map(formatLogValue).join(' ')}${require('os').EOL}`;
+    fs.appendFileSync(MonitorLogPath, line, 'utf8');
+  } catch (error) {
+    originalConsoleError('[监听日志] 写入失败', error);
+  }
+};
+
+console.log = (...args: unknown[]) => {
+  originalConsoleLog(...args);
+  appendMonitorLog(...args);
+};
+
+console.error = (...args: unknown[]) => {
+  originalConsoleError(...args);
+  appendMonitorLog(...args);
+};
+
+const ImMessageTimeKeys = [
+  'time',
+  'timestamp',
+  'sendTime',
+  'msgTime',
+  'serverTime',
+  'createTime',
+  'createdAt',
+  'msgTimestamp',
+];
+
+const parseImTimestamp = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null;
+    if (value > 1_000_000_000_000) return value;
+    if (value > 1_000_000_000) return value * 1000;
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (!text) return null;
+
+    const numeric = Number(text);
+    if (Number.isFinite(numeric)) return parseImTimestamp(numeric);
+
+    const parsed = Date.parse(text);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  return null;
+};
+
+const getImMessageTimestamp = (message: any): number | null => {
+  for (const source of [message, message?.ext]) {
+    if (!source || typeof source !== 'object') continue;
+
+    for (const key of ImMessageTimeKeys) {
+      const timestamp = parseImTimestamp(source[key]);
+      if (timestamp !== null) return timestamp;
+    }
+  }
+
+  return null;
+};
+
+const shouldSkipByImTimeBaseline = (
+  message: any,
+  imTimeBaseline: number,
+): { skip: boolean; timestamp: number | null; reason: string; } => {
+  const timestamp = getImMessageTimestamp(message);
+  if (timestamp === null) {
+    return { skip: true, timestamp, reason: '无可解析 IM 时间戳' };
+  }
+
+  if (timestamp < imTimeBaseline) {
+    return { skip: true, timestamp, reason: '早于启动 IM 时间基线' };
+  }
+
+  return { skip: false, timestamp, reason: '' };
+};
 
 const WebIMConfig = {
   xmppURL: 'https://im-api-vip6-v2.easecdn.com/ws',
@@ -48,10 +146,10 @@ const WebIMConfig = {
   isWindowSDK: false,
   isSandBox: false,
   isDebug: false,
-  autoReconnectNumMax: 2,
-  autoReconnectInterval: 2,
+  autoReconnectNumMax: 20,
+  autoReconnectInterval: 5,
   isWebRTC: false,
-  heartBeatWait: 4500,
+  heartBeatWait: 30000,
   delivery: false,
 };
 
@@ -314,6 +412,10 @@ process.on('SIGINT', () => {
   }
   params.tuid = IM_Params.myTuid;
   params.name = IM_Params.myName;
+  const imTimeBaseline = IM_Params.imServerTime ?? Date.now();
+  if (IM_Params.imServerTime === null) {
+    console.log('[监听中] 未取得 IM 服务端 Date 响应头，临时使用本机时间作为消息基线');
+  }
 
   let cq: CQ;
   // 建立连接，添加监听事件并绑定处理函数
@@ -323,25 +425,64 @@ process.on('SIGINT', () => {
     cq.onMessage(handleMsg);
   }
 
-  conn.open({
+  const imOpenOptions = {
     apiUrl: WebIMConfig.apiURL,
     user: IM_Params.myTuid,
     accessToken: IM_Params.myToken,
     appKey: WebIMConfig.appkey,
-  });
+  };
+  let reconnectTimer: NodeJS.Timeout | null = null;
+  let reconnectAttempt = 0;
+  let hasReportedSuccess = false;
+
+  const scheduleImReconnect = (reason: string) => {
+    if (reconnectTimer) {
+      console.log(`[监听重连] 已有重连任务，忽略：${reason}`);
+      return;
+    }
+
+    reconnectAttempt += 1;
+    const waitSeconds = Math.min(60, 5 * Math.pow(2, Math.min(reconnectAttempt - 1, 4)));
+    console.log(`[监听重连] ${reason}，将在 ${waitSeconds} 秒后重新连接 IM`);
+
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      openImConnection(`第 ${reconnectAttempt} 次重连`);
+    }, waitSeconds * 1000);
+  };
+
+  const openImConnection = (reason: string) => {
+    try {
+      console.log(`[监听重连] 打开 IM 连接：${reason}`);
+      conn.open(imOpenOptions);
+    } catch (error) {
+      console.log(`[监听重连] 打开 IM 连接失败：${formatLogValue(error)}`);
+      scheduleImReconnect('打开 IM 连接失败');
+    }
+  };
 
   conn.listen({
     onOpened: () => {
-      if (process.send) process.send('success');
+      reconnectAttempt = 0;
+      console.log('[监听中] IM 连接已建立');
+      if (!hasReportedSuccess && process.send) process.send('success');
+      hasReportedSuccess = true;
     },
     onClosed: () => {
-      console.log('[监听停止]');
-      process.exit(0);
+      console.log('[监听断开] IM 连接关闭');
+      scheduleImReconnect('IM 连接关闭');
     },
     onTextMessage: async (message: any) => {
       // Normalize IM sign messages before branching between group and course flows.
       const signMessage = parseSignMessage(message);
       if (signMessage) {
+        const gate = shouldSkipByImTimeBaseline(message, imTimeBaseline);
+        if (gate.skip) {
+          const time = gate.timestamp === null ? 'unknown' : new Date(gate.timestamp).toLocaleString();
+          console.log(`[签到] 跳过非启动后消息：${gate.reason}，time=${time} activeId=${signMessage.activeId}`);
+          return;
+        }
+
         let signType = signMessage.label || (signMessage.source === 'course' ? 'course sign' : 'group sign');
         let otherId = 0;
         let ifphoto = 0;
@@ -390,16 +531,26 @@ process.on('SIGINT', () => {
         }
 
       } else if (isPracticeMessage(message)) {
+        const gate = shouldSkipByImTimeBaseline(message, imTimeBaseline);
+        if (gate.skip) {
+          const time = gate.timestamp === null ? 'unknown' : new Date(gate.timestamp).toLocaleString();
+          console.log(`[随堂练习] 跳过非启动后消息：${gate.reason}，time=${time}`);
+          return;
+        }
+
         void handlePracticeMessage(message, params as BasicCookie).catch((error) => {
           console.log(`[随堂练习] 处理失败：${error}`);
         });
       }
     },
-    onError: (msg: string) => {
+    onError: (msg: any) => {
       console.log(red('[发生异常]'), msg);
-      process.exit(0);
+      const errorType = msg && typeof msg === 'object' ? msg.type : undefined;
+      scheduleImReconnect(String(errorType) === '16' ? 'IM 连接断开(type=16)' : 'IM 异常');
     },
   });
 
+  openImConnection('首次启动');
   console.log(blue(`[监听中] ${config.cqserver.cq_enabled ? 'CQ服务器已连接' : ''} ${config.mailing?.enabled ? '邮件推送已开启' : ''}...`));
+  console.log(blue(`[监听中] 只处理不早于 IM 时间基线 ${new Date(imTimeBaseline).toLocaleString()} 的签到/随堂练习消息...`));
 })();

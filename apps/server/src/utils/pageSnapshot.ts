@@ -15,6 +15,7 @@ interface PageSnapshotInput {
 const SnapshotDir = path.resolve(__dirname, '../../../../logs/page-snapshots');
 const MaxHtmlChars = 800000;
 const MaxJsonChars = 250000;
+const UnknownSnapshotMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
 
 const clip = (value: string, max: number): string => (
   value.length > max ? `${value.slice(0, max)}\n<!-- clipped: ${value.length - max} chars omitted -->` : value
@@ -28,6 +29,40 @@ const sanitizeSegment = (value: unknown): string => String(value || 'unknown')
 const normalizeKind = (kind: string | undefined): SnapshotKind => {
   if (kind === 'signin' || kind === 'practice' || kind === 'browser') return kind;
   return 'unknown';
+};
+
+const isUnknownSnapshotFile = (fileName: string): boolean => /-(browser|unknown)-/i.test(fileName);
+
+export const cleanupOldUnknownSnapshots = (now = Date.now()) => {
+  if (!fs.existsSync(SnapshotDir)) return { deleted: 0 };
+
+  const cutoff = now - UnknownSnapshotMaxAgeMs;
+  let deleted = 0;
+
+  for (const entry of fs.readdirSync(SnapshotDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !isUnknownSnapshotFile(entry.name)) continue;
+
+    const filePath = path.join(SnapshotDir, entry.name);
+    const stats = fs.statSync(filePath);
+    if (stats.mtimeMs >= cutoff) continue;
+
+    fs.unlinkSync(filePath);
+    deleted += 1;
+  }
+
+  if (deleted > 0) {
+    console.log(`[pageSnapshot] deleted ${deleted} old unknown snapshot file(s)`);
+  }
+
+  return { deleted };
+};
+
+const safeCleanupOldUnknownSnapshots = () => {
+  try {
+    cleanupOldUnknownSnapshots();
+  } catch (error) {
+    console.log(`[pageSnapshot] cleanup failed: ${error}`);
+  }
 };
 
 export const writePageSnapshot = (input: PageSnapshotInput) => {
@@ -76,3 +111,5 @@ export const safeWritePageSnapshot = (input: PageSnapshotInput) => {
     return null;
   }
 };
+
+safeCleanupOldUnknownSnapshots();

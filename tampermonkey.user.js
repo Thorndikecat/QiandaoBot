@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         Chaoxing Page Snapshot And Practice Random Picker
 // @namespace    https://github.com/Thorndikecat/QiandaoBot
-// @version      1.2
+// @version      1.3
 // @description  Captures Chaoxing sign/practice page structure and randomly selects one practice option.
-// @match        *://mobilelearn.chaoxing.com/*
+// @match        *://chaoxing.com/*
+// @match        *://*.chaoxing.com/*
 // @grant        none
 // @run-at       document-start
 // ==/UserScript==
@@ -15,6 +16,7 @@
   const AUTO_SUBMIT = true;
   const MAX_WAIT_MS = 15000;
   const CHECK_INTERVAL_MS = 500;
+  const UNKNOWN_PAGE_SNAPSHOT_DELAY_MS = 5000;
   const MAX_HTML_CHARS = 700000;
   const MAX_TEXT_CHARS = 300;
   const MAX_ITEMS = 120;
@@ -291,9 +293,11 @@
 
   installNetworkHooks();
 
+  const isMobileLearnPage = () => window.location.hostname === 'mobilelearn.chaoxing.com';
+
   const start = () => {
     const kind = detectKind();
-    if (kind === 'practice') {
+    if (kind === 'practice' && isMobileLearnPage()) {
       const startedAt = Date.now();
       const timer = window.setInterval(() => {
         if (clickRandomOption() || Date.now() - startedAt > MAX_WAIT_MS) {
@@ -301,10 +305,18 @@
           void sendSnapshotOnce('practice-timeout-or-finished');
         }
       }, CHECK_INTERVAL_MS);
+    } else if (kind === 'practice') {
+      window.setTimeout(() => {
+        void sendSnapshotOnce('practice-page-ready-no-autosubmit');
+      }, 3000);
     } else if (kind === 'signin') {
       window.setTimeout(() => {
         void sendSnapshotOnce('signin-page-ready');
       }, 3000);
+    } else {
+      window.setTimeout(() => {
+        void sendSnapshotOnce('unknown-page-ready');
+      }, UNKNOWN_PAGE_SNAPSHOT_DELAY_MS);
     }
   };
 

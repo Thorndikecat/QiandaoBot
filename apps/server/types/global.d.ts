@@ -71,6 +71,7 @@ interface IMParamsType {
   myToken: string;
   myTuid: string;
   myPuid: string;
+  imServerTime: number | null;
 }
 
 interface UserCookieType {

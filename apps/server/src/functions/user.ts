@@ -163,7 +163,7 @@ export const getLocalUsers = () => {
 };
 
 /**
- * @returns \{ myName, myToken, myTuid, myPuid \}
+ * @returns \{ myName, myToken, myTuid, myPuid, imServerTime \}
  */
 export const getIMParams = async (cookies: BasicCookie): Promise<IMParamsType | 'AuthFailed'> => {
   const params = {
@@ -171,12 +171,17 @@ export const getIMParams = async (cookies: BasicCookie): Promise<IMParamsType | 
     myToken: '',
     myTuid: '',
     myPuid: '',
+    imServerTime: null as number | null,
   };
   const result = await request(WEBIM.URL, {
     headers: {
       Cookie: cookieSerialize(cookies),
     },
   });
+  const serverDate = Array.isArray(result.headers.date) ? result.headers.date[0] : result.headers.date;
+  const serverTime = serverDate ? Date.parse(serverDate) : NaN;
+  params.imServerTime = Number.isNaN(serverTime) ? null : serverTime;
+
   const data = result.data;
   if (data === '') {
     console.log('身份凭证似乎过期，请手动登录');

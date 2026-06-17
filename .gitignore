@@ -31,6 +31,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 keep-monitor.credentials.json
+apps/server/src/configs/storage.json
+apps/server/build/configs/storage.json
+logs/
 logs/practice-options.log
 logs/last_practice_page.html
 logs/page-snapshots/

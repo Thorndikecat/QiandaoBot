@@ -7,7 +7,32 @@ import { safeWritePageSnapshot } from '../utils/pageSnapshot';
 import { cookieSerialize, request } from '../utils/request';
 
 const PracticeLogPath = path.resolve(__dirname, '../../../../logs/practice-options.log');
-const handledPracticeKeys = new Set<string>();
+const HandledPracticePath = path.resolve(__dirname, '../../../../logs/handled-practice-ids.json');
+const MaxHandledPracticeKeys = 500;
+const PracticeFreshWindowMs = 2 * 60 * 60 * 1000;
+
+const loadHandledPracticeKeys = (): Set<string> => {
+  try {
+    const text = fs.readFileSync(HandledPracticePath, 'utf8');
+    const data = JSON.parse(text);
+    const keys = Array.isArray(data) ? data : data?.keys;
+    return new Set(Array.isArray(keys) ? keys.map(String) : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const handledPracticeKeys = loadHandledPracticeKeys();
+
+const persistHandledPracticeKeys = () => {
+  try {
+    fs.mkdirSync(path.dirname(HandledPracticePath), { recursive: true });
+    const keys = Array.from(handledPracticeKeys).slice(-MaxHandledPracticeKeys);
+    fs.writeFileSync(HandledPracticePath, JSON.stringify({ keys }, null, 2), 'utf8');
+  } catch (error) {
+    console.log(`[随堂练习] 保存去重记录失败：${error}`);
+  }
+};
 
 const PracticeKeywords = [
   '随堂练习',
@@ -56,13 +81,16 @@ type PracticeAttachment = {
   aid?: string;
   url?: string;
   title?: string;
+  subTitle?: string;
+  atypeName?: string;
   name?: string;
   type?: string;
   content?: string;
   description?: string;
   courseInfo?: {
-    classid?: string;
-    courseid?: string;
+    classid?: string | number;
+    courseid?: string | number;
+    coursename?: string;
   };
 };
 
@@ -103,6 +131,50 @@ const uniqueOptions = (options: string[]): string[] => {
   }
 
   return result;
+};
+
+const formatPracticeSummary = (attachment: PracticeAttachment): string => {
+  const course = attachment.courseInfo?.coursename
+    || (attachment.courseInfo?.courseid ? `courseId=${attachment.courseInfo.courseid}` : '');
+  const title = attachment.title || attachment.name || attachment.atypeName || 'unknown';
+  const subTitle = attachment.subTitle ? `发布时间=${attachment.subTitle}` : '';
+  const activeId = attachment.aid ? `activeId=${attachment.aid}` : '';
+
+  return [course, title, subTitle, activeId].filter(Boolean).join(' / ');
+};
+
+const parsePracticeSubTitleTime = (subTitle: unknown, now = Date.now()): number | null => {
+  const text = String(subTitle || '').trim();
+  const match = text.match(/^(\d{1,2})[-/](\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+
+  const current = new Date(now);
+  const date = new Date(
+    current.getFullYear(),
+    Number(match[1]) - 1,
+    Number(match[2]),
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5] || 0),
+  );
+
+  // Around New Year, a recent December message may be parsed into the future.
+  if (date.getTime() > now + 24 * 60 * 60 * 1000) {
+    date.setFullYear(date.getFullYear() - 1);
+  }
+
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
+};
+
+const getPracticeStaleReason = (attachment: PracticeAttachment, now = Date.now()): string | null => {
+  const publishedAt = parsePracticeSubTitleTime(attachment.subTitle, now);
+  if (publishedAt === null) return null;
+
+  const ageMs = now - publishedAt;
+  if (ageMs <= PracticeFreshWindowMs) return null;
+
+  const ageHours = Math.floor(ageMs / (60 * 60 * 1000));
+  return `发布时间超过 ${ageHours} 小时`;
 };
 
 const tryParseJson = (value: string): unknown | null => {
@@ -197,7 +269,7 @@ const extractOptionsFromObject = (value: unknown, depth = 0): string[] => {
 
 const extractOptionsFromInlineQuizList = (html: string): string[] => {
   const options: string[] = [];
-  const assignmentPattern = /this\.quizList\s*=\s*(\[[\s\S]*?\]);/g;
+  const assignmentPattern = /this\.(?:quizList|questionList)\s*=\s*(\[[\s\S]*?\]);/g;
 
   for (const match of html.matchAll(assignmentPattern)) {
     const quizList = tryParseJson(match[1]);
@@ -224,7 +296,7 @@ const getUrlParam = (url: string | undefined, name: string): string => {
 };
 
 const extractInlineQuizList = (html: string): any[] => {
-  const match = html.match(/this\.quizList\s*=\s*(\[[\s\S]*?\]);/);
+  const match = html.match(/this\.(?:quizList|questionList)\s*=\s*(\[[\s\S]*?\]);/);
   const quizList = match ? tryParseJson(match[1]) : null;
   return Array.isArray(quizList) ? quizList : [];
 };
@@ -246,7 +318,7 @@ const extractPracticePageData = (html: string, attachment: PracticeAttachment): 
 
   if (!activeId || !courseId || !classId) return null;
 
-  return { activeId, courseId, classId, quizList };
+  return { activeId: String(activeId), courseId: String(courseId), classId: String(classId), quizList };
 };
 
 const extractOptionsFromHtml = (html: string): string[] => {
@@ -453,6 +525,16 @@ export const handlePracticeMessage = async (message: any, params: BasicCookie) =
   const key = String(attachment.aid || attachment.url || JSON.stringify(attachment).slice(0, 120));
   if (handledPracticeKeys.has(key)) return;
   handledPracticeKeys.add(key);
+  persistHandledPracticeKeys();
+
+  const summary = formatPracticeSummary(attachment);
+  console.log(`[随堂练习] 检测到：${summary}`);
+
+  const staleReason = getPracticeStaleReason(attachment);
+  if (staleReason) {
+    console.log(`[随堂练习] 跳过旧消息：${summary}（${staleReason}）`);
+    return;
+  }
 
   let options = extractOptionsFromObject(message);
   let pageHtml = '';
@@ -486,6 +568,7 @@ export const handlePracticeMessage = async (message: any, params: BasicCookie) =
           attachment,
           extractedOptions: options.slice(0, 20),
           optionCount: options.length,
+          parsedQuestionCount: pageData?.quizList.length || 0,
         },
       });
       
@@ -503,7 +586,11 @@ export const handlePracticeMessage = async (message: any, params: BasicCookie) =
     }
   }
 
-  if (options.length < 2) {
+  if (pageData) {
+    console.log(`[随堂练习] 已解析页面：题目 ${pageData.quizList.length} 道，候选选项 ${options.length} 个，activeId=${pageData.activeId}`);
+  }
+
+  if (!pageData && options.length < 2) {
     console.log('[随堂练习] 已检测到练习消息，但没有解析到可随机记录的选项。');
     return;
   }
@@ -527,6 +614,7 @@ export const handlePracticeMessage = async (message: any, params: BasicCookie) =
 
   writeChoiceLog(preparedAnswer.selectedOptions.join(', '));
   console.log(`[随堂练习] 已随机记录实际提交选项到 ${PracticeLogPath}`);
+  console.log(`[随堂练习] 准备提交：题目 ${preparedAnswer.selectedOptions.length} 道，选项 ${preparedAnswer.selectedOptions.join(', ')}`);
 
   const submitted = await submitPracticeAnswer(pageData, preparedAnswer, params);
   if (submitted) {
