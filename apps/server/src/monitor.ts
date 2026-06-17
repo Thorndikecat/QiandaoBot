@@ -18,7 +18,13 @@ import { delay } from './utils/helper';
 import { parseSignMessage } from './utils/imMessage';
 import { sendEmail } from './utils/mailer';
 import { fetchAndDecodeQrEnc } from './utils/qrDecode';
-import { PromptsOptions, addressPrompts, monitorPromptsQuestions } from './configs/prompts';
+import {
+  PromptsOptions,
+  formatAddressItem,
+  monitorPromptsQuestions,
+  normalizePresetAddress,
+  selectPresetAddress,
+} from './configs/prompts';
 const JSDOM = new jsdom.JSDOM('', { url: 'https://im.chaoxing.com/webim/me' });
 (globalThis.window as any) = JSDOM.window;
 (globalThis.WebSocket as any) = WebSocket;
@@ -167,34 +173,35 @@ const conn = new webIM.connection({
 });
 
 async function configure(phone: string) {
-  const config = getStoredUser(phone);
-  let local = false;
+  const config = getStoredUser(phone) || { phone };
   console.log(blue('自动签到支持 [普通/手势/拍照/签到码/位置]'));
-  if (config?.monitor) {
-    local = (
-      await prompts(
-        {
-          type: 'confirm',
-          name: 'local',
-          message: '是否用本地缓存的签到信息?',
-          initial: true,
-        },
-        PromptsOptions
-      )
-    ).local;
-  }
-  // 若不使用本地，则配置并写入本地
-  if (!local) {
-    const presetAddress = await addressPrompts();
+
+  const savedMonitor: any = config.monitor || {};
+  const savedPresetAddress = normalizePresetAddress([
+    ...((savedMonitor.allPresetAddress || []) as AddressItem[]),
+    ...((savedMonitor.presetAddress || []) as AddressItem[]),
+  ]);
+  const addressSelection = await selectPresetAddress(savedPresetAddress);
+
+  let monitor: any = {
+    ...savedMonitor,
+    presetAddress: [addressSelection.selectedAddress],
+    allPresetAddress: addressSelection.presetAddress,
+  };
+  let mailing: any = config.mailing || { enabled: false };
+  let cqserver: any = config.cqserver || { cq_enabled: false };
+  const shouldPromptSettings = !config.monitor;
+
+  if (shouldPromptSettings) {
     const response = await prompts(monitorPromptsQuestions, PromptsOptions);
-    const monitor: any = {};
-    const mailing: any = {};
-    const cqserver: any = {};
-    monitor.delay = response.delay;
-    monitor.lon = response.lon;
-    monitor.lat = response.lat;
-    monitor.presetAddress = presetAddress;
-    monitor.qrAutoFetch = response.qrAutoFetch || false;
+    monitor = {
+      ...monitor,
+      delay: response.delay,
+      lon: response.lon,
+      lat: response.lat,
+      qrAutoFetch: response.qrAutoFetch || false,
+    };
+    mailing = {};
     mailing.enabled = response.mail;
     mailing.host = response.host;
     mailing.ssl = response.ssl;
@@ -202,29 +209,33 @@ async function configure(phone: string) {
     mailing.user = response.user;
     mailing.pass = response.pass;
     mailing.to = response.to;
+    cqserver = {};
     cqserver.cq_enabled = response.cq_enabled;
     cqserver.ws_url = response.ws_url;
     cqserver.target_type = response.target_type;
     cqserver.target_id = response.target_id;
-    config!.monitor = monitor;
-    config!.mailing = mailing;
-    config!.cqserver = cqserver;
-
-    const data = getJsonObject('configs/storage.json');
-    for (let i = 0; i < data.users.length; i++) {
-      if (data.users[i].phone === phone) {
-        data.users[i].monitor = monitor;
-        data.users[i].mailing = mailing;
-        data.users[i].cqserver = cqserver;
-        break;
-      }
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    fs.writeFile(path.join(__dirname, './configs/storage.json'), JSON.stringify(data), 'utf8', () => { });
   }
 
-  return JSON.parse(JSON.stringify({ mailing: config!.mailing, monitor: config!.monitor, cqserver: config!.cqserver }));
+  monitor.delay = monitor.delay ?? 0;
+  monitor.qrAutoFetch = monitor.qrAutoFetch || false;
+  config.monitor = monitor;
+  config.mailing = mailing;
+  config.cqserver = cqserver;
+
+  const data = getJsonObject('configs/storage.json');
+  let userIndex = data.users.findIndex((user: User) => user.phone === phone);
+  if (userIndex === -1) {
+    data.users.push({ phone });
+    userIndex = data.users.length - 1;
+  }
+
+  data.users[userIndex].monitor = monitor;
+  data.users[userIndex].mailing = mailing;
+  data.users[userIndex].cqserver = cqserver;
+  fs.writeFileSync(path.join(__dirname, './configs/storage.json'), JSON.stringify(data), 'utf8');
+
+  console.log(`[位置] 本次使用：${formatAddressItem(addressSelection.selectedAddress)}`);
+  return JSON.parse(JSON.stringify({ mailing: config.mailing, monitor: config.monitor, cqserver: config.cqserver }));
 }
 
 // 自动获取二维码并签到，优先使用 presetAddress 中保存的位置

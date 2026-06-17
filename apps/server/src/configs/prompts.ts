@@ -1,6 +1,19 @@
 import { red } from 'kolorist';
 import prompts from 'prompts';
 
+type AddressPromptItem = {
+  lon: string;
+  lat: string;
+  address: string;
+};
+
+type SelectAddressResult = {
+  presetAddress: AddressPromptItem[];
+  selectedAddress: AddressPromptItem;
+};
+
+const AddressInputPattern = /^\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*\/\s*(.+?)\s*$/u;
+
 export const PromptsOptions = {
   onCancel: () => {
     console.log(red('✖') + ' 操作取消');
@@ -8,24 +21,62 @@ export const PromptsOptions = {
   },
 };
 
-// 最多保存10个位置，签到失败则轮流尝试
-export const addressPrompts = async () => {
-  const presetAddress = [];
-  for (let i = 0; i < 10; i++) {
-    let { lon_lat_address } = await prompts({
-      type: 'text',
-      name: 'lon_lat_address',
-      message: `位置参数预设#${i + 1}（经纬度/地址）`,
-      validate: value => /^\s*[+-]?\d+(?:\.\d+)?\s*,\s*[+-]?\d+(?:\.\d+)?\s*\/\s*.+\s*$/.test(String(value))
-        || 'Use: longitude,latitude/address',
-    }, PromptsOptions);
-    lon_lat_address = lon_lat_address.match(/^\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*\/\s*(.+?)\s*$/);
-    console.log(`#${i + 1}  经度: ${lon_lat_address?.[1]}  纬度: ${lon_lat_address?.[2]}  地址: ${lon_lat_address?.[3]}`);
-    presetAddress.push({
-      lon: lon_lat_address?.[1],
-      lat: lon_lat_address?.[2],
-      address: lon_lat_address?.[3]
-    });
+export const formatAddressItem = (address: AddressPromptItem) => `${address.lon},${address.lat}/${address.address}`;
+
+export const normalizePresetAddress = (presetAddress: AddressPromptItem[] = []): AddressPromptItem[] => {
+  const result: AddressPromptItem[] = [];
+  const seen = new Set<string>();
+
+  for (const item of presetAddress) {
+    const address = {
+      lon: String(item?.lon || '').trim(),
+      lat: String(item?.lat || '').trim(),
+      address: String(item?.address || '').trim(),
+    };
+    if (!address.lon || !address.lat || !address.address) continue;
+
+    const key = formatAddressItem(address);
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    result.push(address);
+  }
+
+  return result;
+};
+
+const promptAddressInput = async (message: string, initial?: string): Promise<AddressPromptItem> => {
+  let { lon_lat_address } = await prompts({
+    type: 'text',
+    name: 'lon_lat_address',
+    message,
+    initial,
+    validate: value => AddressInputPattern.test(String(value)) || 'Use: longitude,latitude/address',
+  }, PromptsOptions);
+
+  lon_lat_address = String(lon_lat_address).match(AddressInputPattern);
+  if (!lon_lat_address) {
+    throw new Error('Invalid location format. Use: longitude,latitude/address');
+  }
+
+  return {
+    lon: lon_lat_address[1],
+    lat: lon_lat_address[2],
+    address: lon_lat_address[3],
+  };
+};
+
+// 最多保存10个长期位置；每次监听启动时再选择本次使用哪一个。
+export const addressPrompts = async (initialPresetAddress: AddressPromptItem[] = []) => {
+  const presetAddress = normalizePresetAddress(initialPresetAddress);
+  for (let i = presetAddress.length; i < 10; i++) {
+    const address = await promptAddressInput(
+      `位置参数预设#${i + 1}（经纬度/地址）`,
+      i === 0 ? '116.356720,40.000961/北京语言大学主楼南' : undefined
+    );
+    console.log(`#${i + 1}  经度: ${address.lon}  纬度: ${address.lat}  地址: ${address.address}`);
+    presetAddress.push(address);
+
     // 到10个就不再询问继续
     if (i < 9) {
       const { next } = await prompts({
@@ -37,7 +88,49 @@ export const addressPrompts = async () => {
       if (!next) break;
     }
   }
-  return presetAddress;
+  return normalizePresetAddress(presetAddress);
+};
+
+export const selectPresetAddress = async (savedPresetAddress: AddressPromptItem[] = []): Promise<SelectAddressResult> => {
+  let presetAddress = normalizePresetAddress(savedPresetAddress);
+  if (presetAddress.length === 0) {
+    presetAddress = await addressPrompts();
+  }
+
+  const { presetItem } = await prompts({
+    type: 'select',
+    name: 'presetItem',
+    message: '选择本次使用的位置预设',
+    choices: [
+      ...presetAddress.map((address, index) => ({
+        title: formatAddressItem(address),
+        value: index,
+      })),
+      { title: '添加新位置', value: -1 },
+    ],
+    initial: 0,
+  }, PromptsOptions);
+
+  if (presetItem !== -1) {
+    return {
+      presetAddress,
+      selectedAddress: presetAddress[presetItem],
+    };
+  }
+
+  const addedAddress = await promptAddressInput(
+    '新增位置预设（经纬度/地址）',
+    '116.356760,40.001872/北京语言大学主楼北'
+  );
+  presetAddress = normalizePresetAddress([...presetAddress, addedAddress]);
+  const selectedAddress = presetAddress.find(address => formatAddressItem(address) === formatAddressItem(addedAddress))
+    || addedAddress;
+
+  console.log(`已保存新位置：${formatAddressItem(selectedAddress)}`);
+  return {
+    presetAddress,
+    selectedAddress,
+  };
 };
 
 /**

@@ -12,6 +12,7 @@ interface MonitorConfig {
   altitude?: string;
   qrAutoFetch?: boolean;
   presetAddress?: AddressItem[];
+  allPresetAddress?: AddressItem[];
 }
 
 interface MailConfig {
